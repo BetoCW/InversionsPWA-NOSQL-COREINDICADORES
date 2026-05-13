@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.3 - 2026-05-13
+
+### Added
+- Added `diana.sync` prompt and agent into installer assets so `diana init` scaffolds sync guidance in `.github/prompts` and `.github/agents`.
+- Added PowerShell utility `.drfic/diana-sdk/sdk/diana/scripts/powershell/diana-sync-team.ps1` to reconcile Speckit task completion into Diana team canonical tasks by explicit mapping.
+- Added sync operation docs in SDK scripts README and installer README.
+
+### Changed
+- Updated sync policy to preserve Speckit extended tasks (no deletion) while keeping global closure canonical-only.
+- Cleaned duplicate sync-extension section in the root `diana.sync` prompt.
+
 ## v0.1.2 - 2026-04-30
 
 ### Fixed

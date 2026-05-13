@@ -31,3 +31,16 @@ Opciones:
 - `.drfic/diana-sdk/projects/knowledge/indexes/projects-knowledge-radar.yaml`
 - `.github/prompts/diana.*.prompt.md` (si no se usa skip)
 - `.github/agents/diana.*.agent.md` (si no se usa skip)
+
+## Sync Speckit -> Diana TEAM
+
+Script utilitario para reconciliar estado de tareas Speckit hacia tasks canonicos del team:
+
+```powershell
+pwsh .drfic/diana-sdk/sdk/diana/scripts/powershell/diana-sync-team.ps1 -Team TEAM-01 -Feature 002-team-01-dashboard-brokers -Mode dry-run
+pwsh .drfic/diana-sdk/sdk/diana/scripts/powershell/diana-sync-team.ps1 -Team TEAM-01 -Feature 002-team-01-dashboard-brokers -Mode apply
+```
+
+Notas:
+- No elimina tareas extendidas de Speckit.
+- Solo sincroniza cierre de IDs canonicos existentes via mapeo explicito `Speckit Txxx -> Diana Tyyy`.

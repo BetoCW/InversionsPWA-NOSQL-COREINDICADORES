@@ -25,3 +25,7 @@ uvx --from git+https://github.com/UltraFIC/ai-dr.fic.git diana init
 - `.drfic/diana-sdk/projects/knowledge/indexes/projects-knowledge-radar.yaml`
 - `.github/prompts/diana.*.prompt.md` (si no se usa `--skip-actions`)
 - `.github/agents/diana.*.agent.md` (si no se usa `--skip-actions`)
+
+Incluye soporte de sincronizacion de tareas Speckit -> Diana TEAM:
+- Prompt/agent: `diana.sync`
+- Script local: `.drfic/diana-sdk/sdk/diana/scripts/powershell/diana-sync-team.ps1`
