@@ -137,27 +137,27 @@ Fase 7 (T171)
 
 ### Tareas
 
-- [ ] T006-T080 [P] [US1] Implementar API REST de perfil fundamental por empresa en backend/src/routes/fundamental/companyProfile.ts
-  - [ ] T006a Crear endpoint GET /api/team-03/fundamental/{ticker} con parámetros: lookbackDays=252 (default)
-  - [ ] T006b Orquestar llamadas: fundamentalDataService.fetch(ticker) → viabilityEngine.score(data)
-  - [ ] T006c Retornar objeto JSON con estructura: { ticker, company_name, profile: { market_cap, revenue, ... }, metrics: { volatility, beta, ... }, viability: { score, classification, justification }, confidence, timestamp, assumptions, metadata: { sources, calculation_version } }
-  - [ ] T006d Implementar cache a nivel endpoint (Etag/If-Modified-Since) para análisis frecuentes
-  - [ ] T006e Agregar rate limiting: 100 req/min por IP
-  - [ ] T006f Logging: auditTrail.log({action: "profile_requested", ticker, user_id, timestamp})
-  - [ ] T006g Unit tests: ticker válido, ticker invalido, datos incompletos, respuesta válida contra schema
+- [x] T006-T080 [P] [US1] Implementar API REST de perfil fundamental por empresa en backend/src/routes/fundamental/companyProfile.ts
+  - [x] T006a Crear endpoint GET /api/team-03/fundamental/{ticker} con parámetros: lookbackDays=252 (default)
+  - [x] T006b Orquestar llamadas: fundamentalDataService.fetch(ticker) → viabilityEngine.score(data)
+  - [x] T006c Retornar objeto JSON con estructura: { ticker, company_name, profile: { market_cap, revenue, ... }, metrics: { volatility, beta, ... }, viability: { score, classification, justification }, confidence, timestamp, assumptions, metadata: { sources, calculation_version } }
+  - [x] T006d Implementar cache a nivel endpoint (Etag/If-Modified-Since) para análisis frecuentes
+  - [x] T006e Agregar rate limiting: 100 req/min por IP
+  - [x] T006f Logging: auditTrail.log({action: "profile_requested", ticker, user_id, timestamp})
+  - [x] T006g Unit tests: ticker válido, ticker invalido, datos incompletos, respuesta válida contra schema
   - **Criterios de Aceptación**:
     - Latencia p99 < 1s en caché hit, < 3s en hit de servicio
     - Rechaza tickers con <30d histórico con error descriptivo: "Insuficientes datos históricos (15d disponibles, mínimo 30d requerido)"
     - Response status 200 + JSON schema válido, o 4xx con mensaje claro
 
-- [ ] T007-T081 [P] [US1] Implementar API de screener S&P500 en backend/src/routes/fundamental/sp500Screener.ts
-  - [ ] T007a Crear endpoint GET /api/team-03/screener/sp500 con query params: strategy (long_call|long_put|short_call|short_put), minViability=0.65, topN=10, sortBy (viability|volatility|market_cap)
-  - [ ] T007b Implementar pipeline: fetch S&P500 constituents (tabla Supabase) → map to viabilityEngine → filter by minViability → rank by sortBy → retorn top N
-  - [ ] T007c Incluir en respuesta: ranking, score de cada candidato, justificación de inclusión, supuestos aplicados
-  - [ ] T007d Cache full screener cada 6h (volatility y ratios cambian lentamente)
-  - [ ] T007e Rate limiting: 10 req/min por IP
-  - [ ] T007f Logging: auditTrail.log({action: "screener_requested", strategy, topN, timestamp})
-  - [ ] T007g Unit tests: screener retorna top N, order correcto, caché invalida tras 6h
+- [x] T007-T081 [P] [US1] Implementar API de screener S&P500 en backend/src/routes/fundamental/sp500Screener.ts
+  - [x] T007a Crear endpoint GET /api/team-03/screener/sp500 con query params: strategy (long_call|long_put|short_call|short_put), minViability=0.65, topN=10, sortBy (viability|volatility|market_cap)
+  - [x] T007b Implementar pipeline: fetch S&P500 constituents (tabla Supabase) → map to viabilityEngine → filter by minViability → rank by sortBy → retorn top N
+  - [x] T007c Incluir en respuesta: ranking, score de cada candidato, justificación de inclusión, supuestos aplicados
+  - [x] T007d Cache full screener cada 6h (volatility y ratios cambian lentamente)
+  - [x] T007e Rate limiting: 10 req/min por IP
+  - [x] T007f Logging: auditTrail.log({action: "screener_requested", strategy, topN, timestamp})
+  - [x] T007g Unit tests: screener retorna top N, order correcto, caché invalida tras 6h
   - **Criterios de Aceptación**:
     - Retorna exactamente N empresas, ranqueadas correctamente
     - Latencia p99 < 2s en caché hit, < 10s en full compute
