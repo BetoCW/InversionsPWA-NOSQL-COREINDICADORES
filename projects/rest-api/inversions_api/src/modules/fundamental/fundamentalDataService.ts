@@ -172,8 +172,7 @@ export class FinvizDataSource implements PluggableSource {
     // 🧠 FIC: Simulated health check (ES)
     try {
       const testData = await this.fetch("AAPL");
-      // ✅ Usa Boolean() para garantizar conversión segura a boolean
-      return Boolean(testData?.success);
+      return !!testData?.success; // ✅ Double negation converts to boolean
     } catch (error) {
       console.error("Health check failed:", error);
       return false;
@@ -278,7 +277,7 @@ export class YahooFinanceDataSource implements PluggableSource {
   async isHealthy(): Promise<boolean> {
     try {
       const result = await this.fetch("AAPL", 30);
-      return result.success;
+      return !!result.success; // ✅ Double negation converts to boolean
     } catch {
       return false;
     }
