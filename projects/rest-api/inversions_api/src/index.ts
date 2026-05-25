@@ -21,6 +21,7 @@ import { brokerCapabilitiesRouter } from "./routes/brokers/capabilities";
 import { marketDataOhlcRouter } from "./routes/market-data/ohlc";
 import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
 import newsSentimentRouter from './routes/news/sentiment';
+import urlAnalysisRouter from './routes/news/urlAnalysis';
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -56,6 +57,8 @@ app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
+// FIC: urlAnalysisRouter debe estar ANTES de newsSentimentRouter porque tiene rutas más específicas
+app.use("/api/news", urlAnalysisRouter);
 app.use("/api/news", newsSentimentRouter);
 
 app.get("/health", (_req, res) => {

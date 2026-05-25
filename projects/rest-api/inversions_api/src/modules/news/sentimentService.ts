@@ -13,13 +13,19 @@ export interface SentimentResult {
 }
 
 export class SentimentService {
-  private client: Anthropic;
+  private client: Anthropic | null = null;
 
-  constructor() {
-    // Reutiliza la Claude API que ya existe en el proyecto
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+  private getClient(): Anthropic {
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+
+    if (!apiKey) {
+      throw new Error(
+        'ANTHROPIC_API_KEY no está configurada. Agrega tu API key de Anthropic en projects/rest-api/inversions_api/.env y reinicia el backend.'
+      );
+    }
+
+    this.client ??= new Anthropic({ apiKey });
+    return this.client;
   }
 
   async analyzeNewsSentiment(
@@ -62,7 +68,7 @@ Criterios:
 - -0.3 a 0.3 y label NEUTRAL: noticias mixtas o sin impacto claro
 - confidence refleja qué tan clara y consistente es la señal en las noticias`;
 
-    const message = await this.client.messages.create({
+    const message = await this.getClient().messages.create({
       model: 'claude-opus-4-5',
       max_tokens: 512,
       messages: [{ role: 'user', content: prompt }],
