@@ -285,16 +285,16 @@ Fase 7 (T171)
 
 ### Tareas
 
-- [ ] T016-T090 [P] [US3] Implementar chat IA de análisis fundamental y estrategias en backend/src/modules/ai/fundamentalCopilotChat.ts
-  - [ ] T016a Crear interfaz ChatMessage { role: "user"|"assistant", content, timestamp, metadata: { ticker, context_type: "fundamental"|"strategy", reasoning_trace } }
-  - [ ] T016b Implementar lectura de solo lectura a Supabase: tablas company_fundamentals, strategy_evaluations, user_analysis_history
-  - [ ] T016c Crear prompt base para Claude API: "Eres un asesor de inversiones explicativo. Tu rol es EXPLICAR análisis fundamental y estrategias de opciones sin ejecutar operaciones ni dar asesoramiento financiero."
-  - [ ] T016d Enriquecer contexto: inyectar al prompt de Claude el análisis fundamental actual (viability score, justification) + recomendación de estrategia
-  - [ ] T016e Implementar template de respuesta de explicación: estructura explícita de razones, supuestos, limitaciones, disclaimer
-  - [ ] T016f Detectar preguntas sobre "qué puede cambiar": generar lista de escenarios de mercado (vol +50%, earnings miss, sector rotation)
-  - [ ] T016g Detectar preguntas sobre "cómo calculaste": generar árbol de decisión / pasos matemáticos en formato markdown
-  - [ ] T016h Logging: auditTrail.log({action: "chat_message", user_id, ticker, exchange_count, timestamp}) - sin almacenar mensajes completos por privacidad
-  - [ ] T016i Unit tests: validar responses contienen disclaimer, respuestas no incluyen órdenes de ejecución
+- [x] T016-T090 [P] [US3] Implementar chat IA de análisis fundamental y estrategias en backend/src/modules/ai/fundamentalCopilotChat.ts
+  - [x] T016a Crear interfaz ChatMessage { role: "user"|"assistant", content, timestamp, metadata: { ticker, context_type: "fundamental"|"strategy", reasoning_trace } }
+  - [x] T016b Implementar lectura de solo lectura a Supabase: tablas company_fundamentals, strategy_evaluations, user_analysis_history
+  - [x] T016c Crear prompt base para Claude API: "Eres un asesor de inversiones explicativo. Tu rol es EXPLICAR análisis fundamental y estrategias de opciones sin ejecutar operaciones ni dar asesoramiento financiero."
+  - [x] T016d Enriquecer contexto: inyectar al prompt de Claude el análisis fundamental actual (viability score, justification) + recomendación de estrategia
+  - [x] T016e Implementar template de respuesta de explicación: estructura explícita de razones, supuestos, limitaciones, disclaimer
+  - [x] T016f Detectar preguntas sobre "qué puede cambiar": generar lista de escenarios de mercado (vol +50%, earnings miss, sector rotation)
+  - [x] T016g Detectar preguntas sobre "cómo calculaste": generar árbol de decisión / pasos matemáticos en formato markdown
+  - [x] T016h Logging: auditTrail.log({action: "chat_message", user_id, ticker, exchange_count, timestamp}) - sin almacenar mensajes completos por privacidad
+  - [x] T016i Unit tests: validar responses contienen disclaimer, respuestas no incluyen órdenes de ejecución
   - **Criterios de Aceptación**:
     - Chat responde preguntas sobre viabilidad con razones explícitas
     - Chat responde sobre estrategias con escenarios de mercado

@@ -234,14 +234,14 @@ Tareas:
 - [x] T081 Implementar API de screener S&P500 en backend/src/routes/fundamental/sp500Screener.ts que rankea empresas del índice por tipo de estrategia y viabilidad fundamental, retornando top N candidatos con justificación
 
 ### Estrategias Básicas de Opciones
-- [ ] T082 Definir contrato base de parámetros de estrategias de opciones en backend/src/modules/strategies/optionsStrategyContract.ts con campos: ticker, tipo de opción, strike, fecha expiración, prima, cantidad, dirección, capital disponible, tolerancia al riesgo y metadatos de simulación
-- [ ] T083 Implementar core de estrategia Long Call en backend/src/modules/strategies/options/longCall.ts con cálculo de P&L, break-even, máximo beneficio/pérdida, simulación temporal por escenarios de precio, integración de stop-loss y emisión de alertas
-- [ ] T084 Implementar core de estrategia Long Put en backend/src/modules/strategies/options/longPut.ts con las mismas capacidades que T083
-- [ ] T085 Implementar core de estrategia Short Call en backend/src/modules/strategies/options/shortCall.ts con las mismas capacidades que T083 y lógica de margen requerido
-- [ ] T086 Implementar core de estrategia Short Put en backend/src/modules/strategies/options/shortPut.ts con las mismas capacidades que T083 y lógica de margen requerido
-- [ ] T087 Implementar motor de simulación temporal de estrategias en backend/src/modules/strategies/simulationEngine.ts que proyecta P&L a lo largo del tiempo considerando theta decay, movimiento del subyacente y volatilidad implícita
-- [ ] T088 Implementar servicio de alertas en tiempo real y ejecución de stop-loss en backend/src/modules/strategies/alertService.ts que monitorea posiciones abiertas, emite alertas configurables y puede solicitar cierre de operación vía broker
-- [ ] T089 Implementar motor comparador de estrategias en backend/src/modules/strategies/strategyComparator.ts que evalúa P&L esperado, riesgo y contexto de todos los cores activos para recomendar la estrategia más adecuada
+- [x] T082 Definir contrato base de parámetros de estrategias de opciones en backend/src/modules/strategies/optionsStrategyContract.ts con campos: ticker, tipo de opción, strike, fecha expiración, prima, cantidad, dirección, capital disponible, tolerancia al riesgo y metadatos de simulación
+- [x] T083 Implementar core de estrategia Long Call en backend/src/modules/strategies/options/longCall.ts con cálculo de P&L, break-even, máximo beneficio/pérdida, simulación temporal por escenarios de precio, integración de stop-loss y emisión de alertas
+- [x] T084 Implementar core de estrategia Long Put en backend/src/modules/strategies/options/longPut.ts con las mismas capacidades que T083
+- [x] T085 Implementar core de estrategia Short Call en backend/src/modules/strategies/options/shortCall.ts con las mismas capacidades que T083 y lógica de margen requerido
+- [x] T086 Implementar core de estrategia Short Put en backend/src/modules/strategies/options/shortPut.ts con las mismas capacidades que T083 y lógica de margen requerido
+- [x] T087 Implementar motor de simulación temporal de estrategias en backend/src/modules/strategies/simulationEngine.ts que proyecta P&L a lo largo del tiempo considerando theta decay, movimiento del subyacente y volatilidad implícita
+- [x] T088 Implementar servicio de alertas en tiempo real y ejecución de stop-loss en backend/src/modules/strategies/alertService.ts que monitorea posiciones abiertas, emite alertas configurables y puede solicitar cierre de operación vía broker
+- [x] T089 Implementar motor comparador de estrategias en backend/src/modules/strategies/strategyComparator.ts que evalúa P&L esperado, riesgo y contexto de todos los cores activos para recomendar la estrategia más adecuada
 
 ### Chat IA
 - [ ] T090 Implementar chat IA de análisis fundamental y estrategias en backend/src/modules/ai/fundamentalCopilotChat.ts con acceso de solo lectura a Supabase sobre tablas de empresas, métricas fundamentales y posiciones de estrategias
