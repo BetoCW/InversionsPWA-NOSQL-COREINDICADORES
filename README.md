@@ -131,8 +131,9 @@ curl -X POST http://localhost:3000/api/chat/explain \
 
 ## 3. Estado actual y datos reales — donde nos quedamos
 
-> **Nos quedamos parados aqui al cierre del 2026-05-26.** El profe pidio que la tabla y la
-> base de datos "se correlacionaran" para ver datos reales. Lo que se hizo y lo que falta:
+> **Nos quedamos parados aqui al cierre del 2026-05-26.** Falta cerrar la correlacion
+> entre la tabla del dashboard y la base de datos para ver datos reales. Lo que se hizo
+> y lo que falta:
 
 ### ✅ Lo que YA funciona
 
@@ -150,7 +151,7 @@ Si ahora corres una simulacion desde el dashboard y luego haces `SELECT * FROM s
 3. **Los nombres de columna del INSERT actual no matchean 1:1 con el schema que se creo en Supabase** (el helper escribe en formato camelCase JSONB, el schema espera snake_case en algunas columnas como `tolerancia_riesgo`, `runtime_mode`, `cores_habilitados`, etc.). Hay que mapear.
 4. **`GET /api/signals/confluence-table` calcula en vivo desde el mock OHLC** y nunca lee de DB; aunque haya filas guardadas, el endpoint las ignora.
 
-### 🛠️ Lo que falta para que el profe vea datos reales
+### 🛠️ Lo que falta para ver datos reales
 
 Trabajo concreto (~30 min):
 
