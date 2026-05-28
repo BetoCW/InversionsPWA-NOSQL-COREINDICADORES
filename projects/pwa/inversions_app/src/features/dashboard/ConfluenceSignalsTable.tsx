@@ -1,5 +1,6 @@
+// FIC: Canonical confluence signals table — Revolut design tokens applied to all visual elements.
+// FIC: Tabla canónica de señales de confluencia — tokens de diseño Revolut aplicados a todos los elementos visuales.
 // FIC: Phase 5 T095 — tabla canonica con columnas del PDF "DASBOARD Y TABLA v1".
-// FIC: Reemplaza la tabla v0 (symbol/direction/confidence/timestamp) por el contrato del PDF.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSignalStore, type SelectedSignal } from "../../store/signals";
@@ -137,7 +138,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp }: Props) {
                       } else if (col.key === "score" || col.key === "peso" || col.key === "precio") {
                         const v = row[col.key] as number;
                         content = Number.isFinite(v) ? v.toFixed(3) : "-";
-                      } else if (col.key === "core" && row.core === "A_IA" && row.algorithm_version !== "team08-v1") {
+                      } else if (col.key === "core" && row.core === "A_IA") {
                         content = (
                           <span>
                             {row.core}{" "}
