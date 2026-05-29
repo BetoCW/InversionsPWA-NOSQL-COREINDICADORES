@@ -7,7 +7,7 @@ import type { ChatMessage } from "./types";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatInputBar } from "./ChatInputBar";
 import { ChatContextBadge } from "./ChatContextBadge";
-import { sendChatMessage, sendFundamentalCopilotMessage } from "../../services/chat/chatApi";
+import { sendChatMessage, sendFundamentalCopilotMessage, sendOptionsAnalysisQA } from "../../services/chat/chatApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 
@@ -38,10 +38,15 @@ function saveHistory(messages: ChatMessage[]): void {
   }
 }
 
+function extractTickerFromText(text: string): string | null {
+  const match = text.toUpperCase().match(/\b[A-Z]{1,5}(?:[.=][A-Z])?\b/);
+  return match?.[0] ?? null;
+}
+
 export function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory());
   const [pending, setPending] = useState(false);
-  const { selectedInstrument } = useSignalStore();
+  const { selectedInstrument, selectedOptionsStrategy, optionsStrategyParams } = useSignalStore();
   const { analysisCategory, setChatPanelCollapsed } = useAppShellStore();
 
   // FIC: Persist history to sessionStorage on every change.
@@ -64,6 +69,11 @@ export function ChatPanel() {
   }, []);
 
   const conversationHistoryRef = React.useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+
+  useEffect(() => {
+    conversationHistoryRef.current = [];
+    setMessages([]);
+  }, [selectedInstrument?.symbol, selectedOptionsStrategy?.name, analysisCategory]);
 
   const handleSend = useCallback(async (text: string) => {
     if (pending) return;
@@ -97,12 +107,30 @@ export function ChatPanel() {
     try {
       let responseContent: string;
 
-      if (analysisCategory === "fundamental") {
-        const ticker = selectedInstrument?.symbol ?? "SPY";
+      const strategyKeyMap: Record<string, string> = {
+        "short-put":  "SHORT_PUT",
+        "long-put":   "LONG_PUT",
+        "short-call": "SHORT_CALL",
+        "long-call":  "LONG_CALL",
+      };
+
+      if (selectedOptionsStrategy && optionsStrategyParams) {
+        const response = await sendOptionsAnalysisQA({
+          ...optionsStrategyParams,
+          question: text,
+          selectedStrategy: strategyKeyMap[selectedOptionsStrategy.id],
+        });
+        responseContent = response.answer;
+      } else if (analysisCategory === "fundamental") {
+        const ticker = selectedInstrument?.symbol ?? extractTickerFromText(text);
+        if (!ticker) {
+          throw new Error("Selecciona una empresa o escribe el ticker en tu pregunta para analizar fundamentales.");
+        }
         const history = conversationHistoryRef.current;
         const response = await sendFundamentalCopilotMessage({
           ticker,
           question: text,
+          strategy: selectedOptionsStrategy?.name,
           conversationHistory: history,
         });
         responseContent = response.answer;

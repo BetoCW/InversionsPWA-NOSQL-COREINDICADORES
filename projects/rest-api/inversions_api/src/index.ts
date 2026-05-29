@@ -37,6 +37,7 @@ import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile"
 import { createSp500ScreenerRouter } from "./routes/fundamental/sp500Screener";
 import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
 import { createOptionsRouter } from "./routes/strategies/optionsRouter";
+import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
 import { createFundamentalCopilotRouter } from "./routes/ai/fundamentalCopilot";
 import { supabaseClient } from "./database/supabase/client";
 
@@ -92,6 +93,7 @@ app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClien
 app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
 app.use("/api/team-03/screener/sp500", createSp500ScreenerRouter(supabaseClient));
 app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
 app.use("/api/team-03/ai", createFundamentalCopilotRouter(supabaseClient));
 
 app.get("/health", (_req, res) => {
