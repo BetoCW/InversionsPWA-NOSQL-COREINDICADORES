@@ -41,7 +41,8 @@ const initialOperationalMode =
     (window.localStorage.getItem("inversions.runtime.operational") as OperationalMode | null)) ||
   "demo";
 
-const state: SignalStoreState = {
+// useSyncExternalStore requires a new object reference on each update so React detects the change.
+let state: SignalStoreState = {
   selectedInstrument: undefined,
   selectedSignal: undefined,
   runtimeMode: initialRuntimeMode,
@@ -69,22 +70,22 @@ export function useSignalStore() {
   return {
     ...snapshot,
     setSelectedInstrument: (instrument: SelectedInstrument) => {
-      state.selectedInstrument = instrument;
+      state = { ...state, selectedInstrument: instrument };
       emit();
     },
     setSelectedSignal: (signal: SelectedSignal) => {
-      state.selectedSignal = signal;
+      state = { ...state, selectedSignal: signal };
       emit();
     },
     setRuntimeMode: (mode: RuntimeMode) => {
-      state.runtimeMode = mode;
+      state = { ...state, runtimeMode: mode };
       if (typeof window !== "undefined") {
         window.localStorage.setItem("inversions.runtime.mode", mode);
       }
       emit();
     },
     setOperationalMode: (mode: OperationalMode) => {
-      state.operationalMode = mode;
+      state = { ...state, operationalMode: mode };
       if (typeof window !== "undefined") {
         window.localStorage.setItem("inversions.runtime.operational", mode);
       }

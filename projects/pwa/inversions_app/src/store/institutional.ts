@@ -22,13 +22,16 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 
-const state: InstitutionalStoreState = {
+let state: InstitutionalStoreState = {
   results: {},
   loading: {},
   errors: {},
 };
 
+let snapshot: InstitutionalStoreState = { ...state };
+
 function emit(): void {
+  snapshot = { ...state };
   for (const listener of listeners) listener();
 }
 
@@ -38,35 +41,39 @@ function subscribe(listener: Listener): () => void {
 }
 
 function getSnapshot(): InstitutionalStoreState {
-  return state;
+  return snapshot;
 }
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 export function setInstitutionalLoading(ticker: string, loading: boolean): void {
-  state.loading = { ...state.loading, [ticker.toUpperCase()]: loading };
+  state = { ...state, loading: { ...state.loading, [ticker.toUpperCase()]: loading } };
   emit();
 }
 
 export function setInstitutionalResult(ticker: string, result: InstitutionalAnalysisResponse): void {
   const key = ticker.toUpperCase();
-  state.results = { ...state.results, [key]: result };
-  state.loading = { ...state.loading, [key]: false };
-  state.errors = { ...state.errors, [key]: null };
+  state = {
+    ...state,
+    results: { ...state.results, [key]: result },
+    loading: { ...state.loading, [key]: false },
+    errors: { ...state.errors, [key]: null },
+  };
   emit();
 }
 
 export function setInstitutionalError(ticker: string, error: string): void {
   const key = ticker.toUpperCase();
-  state.loading = { ...state.loading, [key]: false };
-  state.errors = { ...state.errors, [key]: error };
+  state = {
+    ...state,
+    loading: { ...state.loading, [key]: false },
+    errors: { ...state.errors, [key]: error },
+  };
   emit();
 }
 
 export function clearInstitutionalResults(): void {
-  state.results = {};
-  state.loading = {};
-  state.errors = {};
+  state = { results: {}, loading: {}, errors: {} };
   emit();
 }
 

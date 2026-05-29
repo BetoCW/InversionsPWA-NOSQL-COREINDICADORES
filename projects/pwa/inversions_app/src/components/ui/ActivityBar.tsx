@@ -2,20 +2,8 @@
 // FIC: ActivityBar — barra de navegación vertical estilo VS Code con soporte de teclado, toggle de sección y toggle de chat.
 
 import React from "react";
-import { List, BarChart2, Layers, MessageSquare } from "lucide-react";
-import { useAppShellStore, type AppShellSection } from "../../store/appShell";
-
-interface NavItem {
-  section: AppShellSection;
-  icon: React.ReactNode;
-  label: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { section: "watchlist", icon: <List size={20} />, label: "Watchlist" },
-  { section: "analysis", icon: <BarChart2 size={20} />, label: "Análisis" },
-  { section: "strategies", icon: <Layers size={20} />, label: "Estrategias" },
-];
+import { List, MessageSquare } from "lucide-react";
+import { useAppShellStore } from "../../store/appShell";
 
 const iconButtonStyle = (isActive: boolean): React.CSSProperties => ({
   width: "40px",
@@ -33,15 +21,9 @@ const iconButtonStyle = (isActive: boolean): React.CSSProperties => ({
 });
 
 export function ActivityBar() {
-  const { activeSection, leftPanelCollapsed, setActiveSection, chatPanelCollapsed, toggleChatPanel } = useAppShellStore();
+  const { leftPanelCollapsed, toggleLeftPanel, chatPanelCollapsed, toggleChatPanel } = useAppShellStore();
 
-  const handleKeyDown = (e: React.KeyboardEvent, section: AppShellSection) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      setActiveSection(section);
-    }
-  };
-
+  const isWatchlistActive = !leftPanelCollapsed;
   const isChatActive = !chatPanelCollapsed;
 
   return (
@@ -56,35 +38,19 @@ export function ActivityBar() {
         paddingBottom: "var(--space-sm)",
       }}
     >
-      {/* Section navigation icons */}
-      <nav
-        aria-label="Navegación principal"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "var(--space-xs)",
-          width: "100%",
-        }}
-      >
-        {NAV_ITEMS.map(({ section, icon, label }) => {
-          const isActive = activeSection === section && !leftPanelCollapsed;
-          return (
-            <button
-              key={section}
-              onClick={() => setActiveSection(section)}
-              onKeyDown={(e) => handleKeyDown(e, section)}
-              onMouseDown={(e) => e.preventDefault()}
-              aria-label={label}
-              aria-pressed={isActive}
-              title={label}
-              tabIndex={0}
-              style={iconButtonStyle(isActive)}
-            >
-              {icon}
-            </button>
-          );
-        })}
+      {/* Watchlist toggle — only navigation icon */}
+      <nav aria-label="Navegación principal" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+        <button
+          onClick={toggleLeftPanel}
+          onMouseDown={(e) => e.preventDefault()}
+          aria-label="Watchlist"
+          aria-pressed={isWatchlistActive}
+          title="Watchlist"
+          tabIndex={0}
+          style={iconButtonStyle(isWatchlistActive)}
+        >
+          <List size={20} />
+        </button>
       </nav>
 
       {/* Spacer pushes chat icon to bottom */}

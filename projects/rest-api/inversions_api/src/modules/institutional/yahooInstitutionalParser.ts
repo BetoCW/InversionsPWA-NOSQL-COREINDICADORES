@@ -5,7 +5,7 @@ import type { InstitutionalSourceObservation, ParseFn } from "./institutionalDat
 import { getYahooSession, YAHOO_USER_AGENT } from "./yahooCrumbSession";
 
 const YAHOO_QUOTE_URL = "https://query2.finance.yahoo.com/v10/finance/quoteSummary";
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 6_000;
 
 // FIC: Deterministic seed fallback — same ticker always yields the same synthetic result. (EN)
 // FIC: Respaldo con seed determinista — el mismo ticker siempre produce el mismo resultado sintético. (ES)

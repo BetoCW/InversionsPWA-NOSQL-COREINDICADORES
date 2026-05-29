@@ -9,7 +9,8 @@ import type { InstitutionalAnalysisPeriod } from "./institutionalContract";
 
 const EDGAR_USER_AGENT =
   process.env.EDGAR_USER_AGENT ?? "TurboPapus/1.0 (contact@turbopapus.com)";
-const SEC_REQUEST_TIMEOUT_MS = 30_000;
+// FIC: 6s per request — EDGAR responds in < 2s on normal conditions; 6s covers slow responses. (EN)
+const SEC_REQUEST_TIMEOUT_MS = 6_000;
 const MAX_FILINGS = 1;
 
 const JSON_HEADERS: Record<string, string> = {
@@ -33,33 +34,98 @@ const searchEftsCache = new Map<string, { hits: EftsHit[]; timestamp: number }>(
 const inflightEfts = new Map<string, Promise<EftsHit[]>>();
 const SEARCH_EFTS_CACHE_TTL_MS = 86_400_000; // 24 hours / 24 horas
 
-// FIC: CUSIP map for 60 major tickers — hardcoded because CUSIP Global Services is a paid API. (EN)
-// FIC: Mapa de CUSIP para 60 tickers principales — hardcoded porque CUSIP Global Services es una API de pago. (ES)
+// FIC: CUSIP map for ~200 major tickers — hardcoded because CUSIP Global Services is a paid API. (EN)
+// FIC: Mapa de CUSIP para ~200 tickers principales — hardcoded porque CUSIP Global Services es una API de pago. (ES)
 const TICKER_CUSIP_MAP: Record<string, string> = {
+  // ── Mega-cap Technology ────────────────────────────────────────────────────
   AAPL: "037833100", MSFT: "594918104", GOOGL: "02079K305", GOOG: "02079K107",
   AMZN: "023135106", META: "30303M102", TSLA: "88160R101", NVDA: "67066G104",
-  JPM:  "46625H100", V:    "92826C839", SPY:  "78462F103", QQQ:  "46090E103",
-  INTC: "458140100", CSCO: "17275R102", IBM:  "459200101", QCOM: "747525103",
-  AMD:  "007903107", ADBE: "00724F101", ORCL: "68389X105", CRM:  "79466L302",
-  NOW:  "81762P102", INTU: "461202103", WMT:  "931142103", HD:   "437076102",
-  COST: "22160K105", PG:   "742718109", KO:   "191216100", PEP:  "713448108",
-  MCD:  "580135101", DIS:  "254687106", SBUX: "855244109", NFLX: "64110L106",
-  BKNG: "09857L108", LOW:  "548661107", TGT:  "87612E106", UNH:  "91324P102",
-  JNJ:  "478160104", ABBV: "00287Y109", MRK:  "58933Y105", LLY:  "532457108",
-  TMO:  "883556102", ABT:  "002824100", PFE:  "717081103", MDT:  "G5960L103",
-  XOM:  "30231G102", CVX:  "166764100", BA:   "097023105", GE:   "369604103",
-  CAT:  "149123101", UPS:  "911312106", UNP:  "907818108", HON:  "438516106",
-  LMT:  "539830109", C:    "172967424", "BRK.B": "084670702", "BRK.A": "084670108",
-  VZ:   "92343V104", T:    "00206R102", NEE:  "65339F101", AVGO: "11135F101",
-  ACN:  "G1151C101", LIN:  "G54508105", AMT:  "02900S103", TROW: "74251T102",
+  AVGO: "11135F101", AMD:  "007903107", INTC: "458140100", QCOM: "747525103",
+  TXN:  "882635109", MU:   "595112103", AMAT: "009553108", LRCX: "512807108",
+  KLAC: "482480100", ADBE: "00724F101", CRM:  "79466L302", NOW:  "81762P102",
+  INTU: "461202103", ORCL: "68389X105", IBM:  "459200101", CSCO: "17275R102",
+  ACN:  "G1151C101",
+
+  // ── Payments & Fintech ──────────────────────────────────────────────────────
+  V:    "92826C839", MA:   "57636Q104", PYPL: "70450Y103", COIN: "19260Q107",
+  PLTR: "69608A108",
+
+  // ── Internet & Software ────────────────────────────────────────────────────
+  NFLX: "64110L106", ZM:   "98980L101", DDOG: "23804L103", NET:  "18915M107",
+  TWLO: "90138F102", SNAP: "83304A106", PINS: "72352L106", RBLX: "771049103",
+  UBER: "90353T100", ABNB: "00090Q103", DASH: "23292X109", DOCU: "256163106",
+
+  // ── Index ETFs ──────────────────────────────────────────────────────────────
+  SPY:  "78462F103", QQQ:  "46090E103", IWM:  "464287655",
+
+  // ── Banking & Financial Services ──────────────────────────────────────────
+  JPM:  "46625H100", BAC:  "060505104", WFC:  "949746101", GS:   "38141G104",
+  MS:   "617446448", C:    "172967424", USB:  "902973304", PNC:  "693475105",
+  TFC:  "89832Q109", SCHW: "808513105", AXP:  "025816109", BLK:  "09247X101",
+  COF:  "14040H105", "BRK.B": "084670702", "BRK.A": "084670108",
+
+  // ── Healthcare & Pharma ────────────────────────────────────────────────────
+  UNH:  "91324P102", JNJ:  "478160104", LLY:  "532457108", ABBV: "00287Y109",
+  MRK:  "58933Y105", TMO:  "883556102", ABT:  "002824100", PFE:  "717081103",
+  MDT:  "G5960L103", AMGN: "031162100", GILD: "375558103", BMY:  "110122108",
+  REGN: "75886F107", VRTX: "92532F100", MRNA: "60770K107", CVS:  "126650100",
+  CI:   "125523100", HCA:  "40412C101", HUM:  "444859102", ISRG: "46120E602",
+  BSX:  "101137107", SYK:  "863667101", EW:   "28176E108", ZBH:  "98956P102",
+
+  // ── Consumer Discretionary ────────────────────────────────────────────────
+  HD:   "437076102", LOW:  "548661107", TGT:  "87612E106", WMT:  "931142103",
+  COST: "22160K105", MCD:  "580135101", SBUX: "855244109", NKE:  "654106103",
+  BKNG: "09857L108", DIS:  "254687106", TJX:  "872540109", LULU: "550021109",
+  ROST: "778296103", DG:   "256677105", DLTR: "256746108", ORLY: "67103H107",
+  AZO:  "053332102",
+
+  // ── Consumer Staples ──────────────────────────────────────────────────────
+  PG:   "742718109", KO:   "191216100", PEP:  "713448108", PM:   "718172109",
+  MO:   "02209S103", MDLZ: "609207105", GIS:  "370334104",
+
+  // ── Communications ────────────────────────────────────────────────────────
+  VZ:   "92343V104", T:    "00206R102", TMUS: "872590104", CMCSA: "20286C102",
+
+  // ── Industrials ───────────────────────────────────────────────────────────
+  BA:   "097023105", GE:   "369604103", CAT:  "149123101", UPS:  "911312106",
+  UNP:  "907818108", HON:  "438516106", LMT:  "539830109", RTX:  "75513E101",
+  NOC:  "666628104", GD:   "369550108", FDX:  "31428X106", DE:   "244199105",
+  MMM:  "88579Y101", ITW:  "452308109", EMR:  "291011104", ROK:  "773903109",
+  CMI:  "200406102", FAST: "303920105", GWW:  "384802104", PCAR: "693718108",
+
+  // ── Energy ────────────────────────────────────────────────────────────────
+  XOM:  "30231G102", CVX:  "166764100", COP:  "20825C104", EOG:  "26875P101",
+  SLB:  "806857108", OXY:  "674599105", BKR:  "05765L103", PSX:  "718546104",
+  VLO:  "91913Y100", MPC:  "56585A102", KMI:  "49456B101", WMB:  "969457100",
+
+  // ── Materials ─────────────────────────────────────────────────────────────
+  LIN:  "G54508105", APD:  "039483102", ECL:  "278865100", SHW:  "824348106",
+  NEM:  "651639106", FCX:  "35671D857", NUE:  "670346105",
+
+  // ── Utilities ─────────────────────────────────────────────────────────────
+  NEE:  "65339F101", SO:   "842162109", DUK:  "26441C204", AEP:  "025537101",
+  EXC:  "30161N101", XEL:  "98389B100", WEC:  "929042109",
+
+  // ── Real Estate ───────────────────────────────────────────────────────────
+  AMT:  "02900S103", PLD:  "74460D109", EQIX: "29444U700", WELL: "95040Q104",
+  SPG:  "828806109", O:    "756109104", DLR:  "253868103", VICI: "925652109",
+  AVB:  "053484101",
+
+  // ── Other Notable ──────────────────────────────────────────────────────────
+  TROW: "74251T102", ADP:  "053015103",
 };
 
 // FIC: Compute EFTS date range based on analysis period. (EN)
-// FIC: Calcula el rango de fechas para EFTS según el período de análisis. (ES)
-function eftsDateRange(period: InstitutionalAnalysisPeriod): { startdt: string; enddt: string } | null {
+// FIC: 13F filings are quarterly — daily/intraday use a 90-day lookback to catch the most recent filing. (ES)
+function eftsDateRange(period: InstitutionalAnalysisPeriod): { startdt: string; enddt: string } {
   const now = new Date();
   const enddt = now.toISOString().slice(0, 10);
-  if (period === "intraday" || period === "daily") return null; // NOT_APPLICABLE
+  if (period === "intraday" || period === "daily") {
+    // 13F data is quarterly regardless of analysis period — use 90-day window to find the latest filing.
+    const start = new Date(now);
+    start.setDate(start.getDate() - 90);
+    return { startdt: start.toISOString().slice(0, 10), enddt };
+  }
   if (period === "weekly") {
     const start = new Date(now);
     start.setMonth(start.getMonth() - 6);
@@ -88,7 +154,6 @@ async function searchEfts(
   if (inflight) return inflight;
 
   const dateRange = eftsDateRange(period);
-  if (!dateRange) return []; // NOT_APPLICABLE for daily/intraday
 
   const params = new URLSearchParams({
     q: query,
@@ -222,8 +287,9 @@ export const parseSecEdgar13fReal: ParseFn = async (ticker, period, fetchImpl) =
 
   try {
     // Global operation timeout: 60s
+    // FIC: 12s global cap for all SEC calls combined (EFTS + index + XML are sequential). (EN)
     const globalAc = new AbortController();
-    const globalTid = setTimeout(() => globalAc.abort(), 60_000);
+    const globalTid = setTimeout(() => globalAc.abort(), 12_000);
 
     try {
       const hits = await searchEfts(cusip, period, fetchImpl);
@@ -265,7 +331,9 @@ export const parseSecEdgar13fReal: ParseFn = async (ticker, period, fetchImpl) =
 
 const FINRA_API = "https://api.finra.org/data/group/otcmarket/name/consolidatedShortInterest";
 const FINRA_PAGE_SIZE = 5_000;
-const FINRA_MAX_PAGES = 6;
+// FIC: 3 pages × 5000 = 15k records — covers all actively traded NMS stocks. (EN)
+const FINRA_MAX_PAGES = 3;
+const FINRA_PAGE_TIMEOUT_MS = 8_000;
 const FINRA_CACHE_TTL_MS = 86_400_000; // 24 hours / 24 horas
 const FINRA_CACHE_FILE = "/tmp/inversions-api-finra-cache.json";
 
@@ -293,9 +361,11 @@ let finraCachePromise: Promise<FinraCache> | null = null;
 // FIC: Build the FINRA request body for a given page offset. (EN)
 // FIC: Construye el body de la request FINRA para un offset de página dado. (ES)
 function buildFinraBody(offset: number): string {
+  // FIC: No domainFilters — the previous filter used wrong market codes (Y/S/D/O) that excluded NYSE (N) and NASDAQ (Q). (EN)
+  // FIC: Sin domainFilters — el filtro anterior usaba códigos incorrectos que excluían NYSE (N) y NASDAQ (Q). (ES)
   return JSON.stringify({
     compareFilters: [],
-    domainFilters: [{ fieldName: "marketClassCode", values: ["Y", "S", "D", "O"] }],
+    domainFilters: [],
     aggregations: [],
     dateRangeFilters: [],
     fields: ["symbolCode", "currentShortInterest", "previousShortInterest",
@@ -350,11 +420,19 @@ export async function ensureFinraCache(fetchImpl: typeof globalThis.fetch = glob
       // Fetch all pages from FINRA
       const allRecords: Record<string, FinraRecord> = {};
       for (let page = 0; page < FINRA_MAX_PAGES; page++) {
-        const res = await fetchImpl(FINRA_API, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: buildFinraBody(page * FINRA_PAGE_SIZE),
-        });
+        const pageAc = new AbortController();
+        const pageTid = setTimeout(() => pageAc.abort(), FINRA_PAGE_TIMEOUT_MS);
+        let res: Response;
+        try {
+          res = await fetchImpl(FINRA_API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: buildFinraBody(page * FINRA_PAGE_SIZE),
+            signal: pageAc.signal,
+          });
+        } finally {
+          clearTimeout(pageTid);
+        }
         if (!res.ok) break;
         const data = (await res.json()) as unknown[];
         if (!Array.isArray(data) || data.length === 0) break;

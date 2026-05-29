@@ -5,7 +5,7 @@ import type { InstitutionalSourceObservation, ParseFn } from "./institutionalDat
 import { getYahooSession, YAHOO_USER_AGENT } from "./yahooCrumbSession";
 
 const YAHOO_OPTIONS_URL = "https://query2.finance.yahoo.com/v7/finance/options";
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 6_000;
 
 interface OptionContract {
   strike?: number;

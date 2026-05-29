@@ -18,6 +18,9 @@ import { ExecuteSimulationButton } from "./ExecuteSimulationButton";
 interface Props {
   ticket: string;
   onResult: (result: SimulationResponse) => void;
+  // FIC: Called with active core IDs when the user clicks Execute — before the API call completes. (EN)
+  // FIC: Llamado con los IDs de cores activos cuando el usuario hace clic en Ejecutar — antes de que complete la API. (ES)
+  onExecute?: (activeCoreIds: CoreId[]) => void;
 }
 
 type Preset = "2A" | "1A" | "6M" | "3M" | "1M";
@@ -32,7 +35,7 @@ function isoPlusDays(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-export function SimulationControlPanel({ ticket, onResult }: Props) {
+export function SimulationControlPanel({ ticket, onResult, onExecute }: Props) {
   const [preset, setPreset] = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
   const [estrategiaTo, setEstrategiaTo] = useState(isoPlusDays(30));
@@ -54,6 +57,8 @@ export function SimulationControlPanel({ ticket, onResult }: Props) {
   const run = async () => {
     setLoading(true);
     setError(null);
+    const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
+    onExecute?.(activeCoreIds);
     try {
       const payload: SimulationRequestPayload = {
         ticket,

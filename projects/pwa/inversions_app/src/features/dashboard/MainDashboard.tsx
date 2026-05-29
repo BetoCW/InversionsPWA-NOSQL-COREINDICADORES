@@ -1,20 +1,10 @@
 // FIC: Main operational dashboard — AppShell 4-zone layout with ActivityBar, LeftPanel, and ChatPanel.
 // FIC: Dashboard operativo principal — layout AppShell de 4 zonas con ActivityBar, LeftPanel y ChatPanel.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  getDashboardOrchestrator,
-  type DashboardOrchestratorResponse,
-  type DashboardSignalCard
-} from "../../services/signals/signalApi";
-import { CoreSelector, type CoreDefinition } from "./CoreSelector";
-import { SignalOverlay } from "./SignalOverlay";
-import { ExplainabilityTable } from "./ExplainabilityTable";
-import { SignalEvidencePanel } from "../signals/SignalEvidencePanel";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SuperChart } from "./SuperChart";
 import { TimeControls } from "./TimeControls";
 import { IndicatorsMenu } from "./IndicatorsMenu";
-import { RuntimeModeSwitches } from "./RuntimeModeSwitches";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
 import { AppShell } from "../../layouts/AppShell";
@@ -22,67 +12,52 @@ import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
 import { ChatPanel } from "../chat/ChatPanel";
 import { Badge } from "../../components/ui/Badge";
-import { SkeletonCard } from "../../components/ui/SkeletonCard";
-import { Drawer } from "../../components/ui/Drawer";
-import type { ConfluenceSignalRow, SimulationResponse } from "../../services/signals/confluenceTableApi";
+import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
+import type { ConfluenceSignalRow, SimulationResponse, CoreId } from "../../services/signals/confluenceTableApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
 import { getInstitutionalAnalysis } from "../../services/institutional/institutionalApi";
 
-const initialCores: CoreDefinition[] = [
-  { id: "technical", label: "Technical", description: "Momentum y estructura", enabled: true },
-  { id: "options", label: "Options", description: "Flujo y skew", enabled: true },
-  { id: "flow", label: "Institutional Flow", description: "UOA/bloques", enabled: true },
-  { id: "news", label: "News", description: "Sentimiento y eventos", enabled: true },
-  { id: "ai", label: "AI", description: "Confirmación IA", enabled: true },
-  // FIC: Institutional core (TEAM-05) — calls /api/institutional/analysis when simulation runs. (EN)
-  // FIC: Core institucional (TEAM-05) — llama /api/institutional/analysis al ejecutar simulación. (ES)
-  { id: "institutional", label: "Institucional", description: "Zonas S/R, tendencias, 13F", enabled: false },
-];
-
 export function MainDashboard() {
   const isTestEnv = import.meta.env.MODE === "test";
   const [timeframe, setTimeframe] = useState("1d");
   const [periodRange, setPeriodRange] = useState<{ startDate: Date; endDate: Date } | null>(null);
-  const [instrumentsInput, setInstrumentsInput] = useState("AAPL,MSFT,NVDA,SPY");
-  const [cores, setCores] = useState<CoreDefinition[]>(initialCores);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [payload, setPayload] = useState<DashboardOrchestratorResponse | null>(null);
-  const [selectedSignal, setSelectedSignal] = useState<DashboardSignalCard | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
-  const [simulationVerdict, setSimulationVerdict] = useState<any | null>(null);
-  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
-  const [evidenceSignal, setEvidenceSignal] = useState<DashboardSignalCard | null>(null);
-  const { selectedInstrument, selectedSignal: storeSelectedRow, runtimeMode, operationalMode } = useSignalStore();
-  const { analysisCategory } = useAppShellStore();
-  const { results: institutionalResults, loading: institutionalLoading } = useInstitutionalStore();
+  const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
+  const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
+  const [instModalTicker, setInstModalTicker] = useState<string | null>(null);
 
-  // FIC: Map analysis category chips to visible dashboard sections.
-  // FIC: Mapeo de chips de categoría de análisis a secciones visibles del dashboard.
-  const showTechnical = ["technical", "ai"].includes(analysisCategory);
-  const showOptions = ["options", "technical"].includes(analysisCategory);
-  const showAI = ["ai", "technical"].includes(analysisCategory);
-  const showInstitutional = analysisCategory === "institutional";
-  const showFundamental = analysisCategory === "fundamental";
-  const showNews = analysisCategory === "news";
+  const { selectedInstrument, runtimeMode, operationalMode } = useSignalStore();
+  const { } = useAppShellStore();
+  const { results: institutionalResults, loading: institutionalLoading, errors: institutionalErrors } = useInstitutionalStore();
+
+  const selectedSymbol = selectedInstrument?.symbol ?? "SPY";
+
+  // FIC: Clear simulation results and institutional flag when the user selects a new ticker. (EN)
+  // FIC: Limpiar resultados de simulación y flag institucional cuando el usuario selecciona un nuevo ticker. (ES)
+  const prevSymbolRef = useRef(selectedSymbol);
+  useEffect(() => {
+    if (prevSymbolRef.current !== selectedSymbol) {
+      prevSymbolRef.current = selectedSymbol;
+      setSimulationRows(undefined);
+      setSimulationVerdict(null);
+      setInstitutionalCoreWasActive(false);
+    }
+  }, [selectedSymbol]);
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
     setSimulationVerdict(result.verdict);
   }, []);
 
-  const selectedSymbol = selectedInstrument?.symbol ?? payload?.cards[0]?.instrument ?? "SPY";
-  const activeCoreCount = useMemo(() => cores.filter((core) => core.enabled).length, [cores]);
+  // FIC: Called when user clicks Execute — fires institutional analysis if A_INSTITUCIONAL core is active. (EN)
+  // FIC: Llamado cuando el usuario hace clic en Ejecutar — dispara análisis institucional si el core A_INSTITUCIONAL está activo. (ES)
+  const handleSimulationExecute = useCallback((activeCoreIds: CoreId[]) => {
+    const institutionalActive = activeCoreIds.includes("A_INSTITUCIONAL");
+    setInstitutionalCoreWasActive(institutionalActive);
 
-  // FIC: Trigger institutional analysis when user navigates to "institutional" category with a selected symbol. (EN)
-  // FIC: Dispara análisis institucional cuando el usuario navega a la categoría "institutional" con símbolo seleccionado. (ES)
-  useEffect(() => {
-    const institutionalCoreEnabled = cores.find((c) => c.id === "institutional")?.enabled ?? false;
-    if (analysisCategory !== "institutional" || !institutionalCoreEnabled || !selectedSymbol) return;
-    if (institutionalResults[selectedSymbol.toUpperCase()]) return;
+    if (!institutionalActive || !selectedSymbol) return;
 
     const controller = new AbortController();
     setInstitutionalLoading(selectedSymbol, true);
@@ -95,34 +70,9 @@ export function MainDashboard() {
       });
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysisCategory, selectedSymbol, cores]);
+  }, [selectedSymbol]);
 
-  const refreshDashboard = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getDashboardOrchestrator({ instruments: instrumentsInput, timeframe });
-      setPayload(response);
-      setSelectedSignal(response.cards[0] ?? null);
-      setLastUpdated(new Date());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo cargar dashboard");
-    } finally {
-      setLoading(false);
-    }
-  }, [instrumentsInput, timeframe]);
-
-  useEffect(() => {
-    void refreshDashboard();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const toggleCore = (coreId: string) => {
-    setCores((prev) => prev.map((core) => (core.id === coreId ? { ...core, enabled: !core.enabled } : core)));
-  };
-
-  // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline.
-  // FIC: Color del badge según modo runtime — cobalt para demo, warning para real, apagado para offline.
+  // FIC: Badge color for runtime mode — cobalt for demo, warning for real, muted for offline. (EN)
   const modeBadgeColor =
     runtimeMode === "offline" ? "var(--color-text-muted)" :
     operationalMode === "real" ? "var(--color-warning)" :
@@ -133,74 +83,53 @@ export function MainDashboard() {
     operationalMode === "real" ? "Real" :
     "Demo";
 
-  // FIC: "En construcción" block shown for categories without dashboard sections yet.
-  // FIC: Bloque "En construcción" para categorías sin secciones del dashboard disponibles aún.
-  const ComingSoonBlock = ({ category }: { category: string }) => (
-    <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
-      <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🚧</div>
-      <p style={{ fontWeight: "var(--font-weight-emphasis)" }}>Esta sección estará disponible próximamente</p>
-      <p style={{ fontSize: "var(--font-size-sm)", marginTop: "0.5rem" }}>Categoría: {category}</p>
-    </div>
+  // FIC: Placeholder section shown for analyses not yet implemented in this sprint. (EN)
+  // FIC: Sección placeholder para análisis no implementados aún en este sprint. (ES)
+  const PlaceholderSection = ({ title, description }: { title: string; description: string }) => (
+    <section className="card" style={{ padding: "var(--space-lg)", opacity: 0.5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+        <h2 style={{ margin: 0, fontSize: "var(--font-size-base)" }}>{title}</h2>
+        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", background: "var(--color-surface-raised)", padding: "2px 8px", borderRadius: "var(--radius-xs)" }}>
+          Próximamente
+        </span>
+      </div>
+      <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>{description}</p>
+    </section>
   );
+
+  const instData = institutionalResults[selectedSymbol.toUpperCase()];
+  const instIsLoading = institutionalLoading[selectedSymbol.toUpperCase()];
+  const instError = institutionalErrors[selectedSymbol.toUpperCase()];
+  const showInstitutionalSection = institutionalCoreWasActive;
 
   const mainContent = (
     <div style={{ padding: "var(--space-lg)", display: "grid", gap: "var(--space-lg)" }}>
-      {/* ── Nav bar row */}
+
+      {/* ── Top bar: logo + mode badge only */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <Badge label="FIC" color="var(--color-accent)" size="sm" />
           <span style={{ fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-base)" }}>Inversions</span>
-          <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>Dashboard de Confluencia</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
-          <Badge
-            label={modeBadgeLabel}
-            color={modeBadgeColor}
-            pulse={operationalMode === "real" && runtimeMode !== "offline"}
-          />
-          {lastUpdated && (
-            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-xs)" }}>
-              Actualizado: {lastUpdated.toLocaleTimeString()}
+          {selectedInstrument && (
+            <span style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+              — {selectedInstrument.symbol}
+              {selectedInstrument.name && ` · ${selectedInstrument.name}`}
             </span>
           )}
         </div>
+        <Badge
+          label={modeBadgeLabel}
+          color={modeBadgeColor}
+          pulse={operationalMode === "real" && runtimeMode !== "offline"}
+        />
       </div>
 
-      {/* ── Filter bar */}
-      <div className="card">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "var(--space-sm)", alignItems: "end" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Instrumentos
-            </label>
-            <input
-              value={instrumentsInput}
-              onChange={(e) => setInstrumentsInput(e.target.value)}
-              placeholder="AAPL, MSFT, NVDA, SPY"
-              onKeyDown={(e) => { if (e.key === "Enter") void refreshDashboard(); }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "0.35rem", fontWeight: "var(--font-weight-emphasis)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Cores
-            </label>
-            <div style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", padding: "0.45rem 0.75rem", color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)", whiteSpace: "nowrap" }}>
-              {activeCoreCount} / {cores.length} activos
-            </div>
-          </div>
-          <button className="btn-primary" onClick={() => void refreshDashboard()} disabled={loading} style={{ height: "34px" }}>
-            {loading ? "Cargando…" : "Actualizar"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Core selector — always visible */}
-      <CoreSelector cores={cores} onToggle={toggleCore} />
-
-      {/* ── Runtime and chart controls — always visible */}
+      {/* ── Chart + time/indicator controls */}
       {!isTestEnv && (
         <div style={{ display: "grid", gap: "var(--space-sm)" }}>
-          <RuntimeModeSwitches />
+          <div className="card" style={{ minHeight: 380 }}>
+            <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
+          </div>
           <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
             <IndicatorsMenu />
             <TimeControls
@@ -212,187 +141,125 @@ export function MainDashboard() {
         </div>
       )}
 
-      {/* ── Error banner */}
-      {error && (
-        <div style={{ background: "rgba(226, 59, 74, 0.08)", border: "1px solid var(--color-sell)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", color: "var(--color-sell)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontWeight: "var(--font-weight-bold)" }}>Error:</span> {error}
+      {/* ── Simulation control — cores + indicators + execute */}
+      <SimulationControlPanel
+        ticket={selectedSymbol}
+        onResult={handleSimulationResult}
+        onExecute={handleSimulationExecute}
+      />
+
+      {/* ── Simulation verdict */}
+      {simulationVerdict && (
+        <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+          <strong>Verdict derivado:</strong>
+          <span>
+            {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
+            {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
+          </span>
         </div>
       )}
 
-      {/* ── Loading skeleton */}
-      {loading && !payload && (
-        <div style={{ display: "grid", gap: "var(--space-sm)", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-          {[1, 2, 3, 4].map((n) => <SkeletonCard key={n} height={110} lines={3} />)}
-        </div>
+      {/* ── Confluence table — empty state until simulation runs */}
+      {simulationRows === undefined ? (
+        <section className="card" style={{ padding: "var(--space-xl)", textAlign: "center", color: "var(--color-text-muted)" }}>
+          <p style={{ fontWeight: "var(--font-weight-emphasis)", marginBottom: "var(--space-xs)" }}>
+            Selecciona un instrumento y ejecuta la simulación
+          </p>
+          <p style={{ fontSize: "var(--font-size-sm)" }}>
+            Configura los cores y presiona Ejecutar para ver la tabla de confluencia.
+          </p>
+        </section>
+      ) : (
+        <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
       )}
 
-      {/* ── Payload views */}
-      {payload && (
-        <div style={{ display: "grid", gap: "var(--space-lg)" }}>
-
-          {/* FIC: SuperChart + simulation — always visible regardless of analysisCategory. */}
-          {/* FIC: SuperChart + simulación — siempre visible independientemente de analysisCategory. */}
-          {!isTestEnv && (
-            <div style={{ display: "grid", gap: "var(--space-md)", gridTemplateColumns: "1fr" }}>
-              <div className="card" style={{ minHeight: 380 }}>
-                <SuperChart symbol={selectedSymbol} timeframe={timeframe} startDate={periodRange?.startDate} endDate={periodRange?.endDate} />
-              </div>
-              <SimulationControlPanel ticket={selectedSymbol} onResult={handleSimulationResult} />
-              {simulationVerdict && (
-                <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                  <strong>Verdict derivado:</strong>
-                  <span>
-                    {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
-                    {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
-                  </span>
-                </div>
-              )}
-            </div>
+      {/* ── Institutional analysis section */}
+      {showInstitutionalSection && (
+        <section className="card" style={{ padding: "var(--space-lg)" }}>
+          <h2 style={{ margin: "0 0 var(--space-md)" }}>Análisis Institucional — {selectedSymbol}</h2>
+          {instIsLoading && (
+            <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
+              Cargando análisis institucional…
+            </p>
           )}
-
-          {/* FIC: Confluence table — visible for technical, options, institutional and AI. */}
-          {/* FIC: Tabla de confluencia — visible para técnico, opciones, institucional e IA. */}
-          <div style={{ display: (showTechnical || showOptions || showInstitutional || showAI) ? "" : "none" }}>
-            <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} />
-          </div>
-
-          {/* FIC: Signal overlay and explainability — technical and AI categories. */}
-          {/* FIC: Overlay de señales y explicabilidad — categorías técnico e IA. */}
-          <div style={{ display: (showTechnical || showAI) ? "" : "none" }}>
-            <SignalOverlay
-              cards={payload.cards}
-              onCardClick={(card) => {
-                setEvidenceSignal(card);
-                setEvidenceDrawerOpen(true);
-              }}
-            />
-          </div>
-
-          {/* FIC: AI explainability table — visible for technical and AI categories. */}
-          {/* FIC: Tabla de explicabilidad IA — visible para categorías técnico e IA. */}
-          <div style={{ display: showAI ? "" : "none" }}>
-            <ExplainabilityTable cards={payload.cards} />
-          </div>
-
-          {/* FIC: Inline evidence — test env only; Drawer handles production evidence display. */}
-          {/* FIC: Evidencia inline — solo en test; el Drawer maneja la evidencia en producción. */}
-          {isTestEnv && (
-            <div className="card">
-              <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <h2>Detalle de evidencia</h2>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {payload.cards.map((card) => (
-                    <button
-                      key={card.signalId}
-                      className={`btn-ghost ${selectedSignal?.signalId === card.signalId ? "active" : ""}`}
-                      onClick={() => setSelectedSignal(card)}
-                    >
-                      {card.instrument}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <SignalEvidencePanel evidence={selectedSignal?.evidence ?? []} />
-              {storeSelectedRow && Array.isArray((storeSelectedRow.metadata as any)?.evidencia_refs) && (
-                <div style={{ marginTop: "0.75rem", padding: "0.5rem 0.75rem", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)" }}>
-                  <strong style={{ fontSize: "0.8rem" }}>Evidencia de la fila seleccionada</strong>
-                  <ul style={{ margin: "0.4rem 0 0 1rem", padding: 0, fontSize: "0.75rem" }}>
-                    {((storeSelectedRow.metadata as any).evidencia_refs as string[]).map((ref, i) => (
-                      <li key={`${ref}-${i}`}>{ref}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+          {instError && !instIsLoading && (
+            <p style={{ color: "var(--color-sell)", fontSize: "var(--font-size-sm)" }}>
+              Error: {instError}
+            </p>
           )}
-
-          {/* FIC: Institutional summary view — shows when analysisCategory=institutional. (EN) */}
-          {/* FIC: Vista resumen institucional — visible cuando analysisCategory=institutional. (ES) */}
-          {showInstitutional && (() => {
-            const instData = institutionalResults[selectedSymbol.toUpperCase()];
-            const isLoading = institutionalLoading[selectedSymbol.toUpperCase()];
-            return (
-              <div className="card" style={{ padding: "var(--space-lg)" }}>
-                <h2 style={{ margin: "0 0 var(--space-md)" }}>Análisis Institucional — {selectedSymbol}</h2>
-                {isLoading && (
-                  <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-                    Cargando análisis institucional…
-                  </p>
-                )}
-                {!isLoading && !instData && (
-                  <p style={{ color: "var(--color-text-muted)", fontSize: "var(--font-size-sm)" }}>
-                    Activa el core "Institucional" y actualiza para cargar datos.
-                  </p>
-                )}
-                {instData && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "var(--space-md)" }}>
-                    {instData.trends && (
-                      <div>
-                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Tendencia</p>
-                        <p style={{ fontWeight: 600, color: instData.trends.direction === "bullish" ? "var(--color-buy)" : instData.trends.direction === "bearish" ? "var(--color-sell)" : "var(--color-text-muted)" }}>
-                          {instData.trends.direction === "bullish" ? "🟢 Bullish" : instData.trends.direction === "bearish" ? "🔴 Bearish" : "⚫ Neutral"}
-                        </p>
-                      </div>
-                    )}
-                    {instData.zones && (
-                      <div>
-                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Zonas detectadas</p>
-                        <p style={{ fontWeight: 600 }}>{instData.zones.support.length} soporte · {instData.zones.resistance.length} resistencia</p>
-                      </div>
-                    )}
-                    {instData.expiration && (
-                      <div>
-                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Próximo OpEx</p>
-                        <p style={{ fontWeight: 600 }}>{instData.expiration.daysToNextOpex} días</p>
-                      </div>
-                    )}
-                    {instData.metrics && (
-                      <div>
-                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Ownership inst.</p>
-                        <p style={{ fontWeight: 600 }}>{instData.metrics.fundsOwnershipPct.toFixed(1)}%</p>
-                      </div>
-                    )}
-                    {instData.metrics && (
-                      <div>
-                        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Net Flow</p>
-                        <p style={{ fontWeight: 600, color: instData.metrics.netFlow >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
-                          ${instData.metrics.netFlow.toLocaleString()}
-                        </p>
-                      </div>
-                    )}
-                    <div>
-                      <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>Fuentes</p>
-                      <p style={{ fontSize: "var(--font-size-xs)" }}>
-                        {instData.sourceReports.map((s) => (
-                          <span key={s.sourceId} style={{ marginRight: "var(--space-xs)" }}>
-                            {s.status === "ok" ? "✅" : s.status === "partial" ? "⚠️" : "❌"} {s.sourceId.split("_")[0]}
-                          </span>
-                        ))}
-                      </p>
-                    </div>
+          {instData && !instIsLoading && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--space-md)" }}>
+                {instData.trends && (
+                  <div>
+                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Tendencia</p>
+                    <p style={{ fontWeight: 600, margin: 0, color: instData.trends.direction === "bullish" ? "var(--color-buy)" : instData.trends.direction === "bearish" ? "var(--color-sell)" : "var(--color-text-muted)" }}>
+                      {instData.trends.direction === "bullish" ? "🟢 Bullish" : instData.trends.direction === "bearish" ? "🔴 Bearish" : "⚫ Neutral"}
+                    </p>
                   </div>
                 )}
-                {instData && (
-                  <p style={{ marginTop: "var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                    Haz clic en una fila de la tabla de confluencia para ver el detalle completo.
-                  </p>
+                {instData.zones && (
+                  <div>
+                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Zonas detectadas</p>
+                    <p style={{ fontWeight: 600, margin: 0 }}>{instData.zones.support.length} soporte · {instData.zones.resistance.length} resistencia</p>
+                  </div>
                 )}
+                {instData.expiration && (
+                  <div>
+                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Próximo OpEx</p>
+                    <p style={{ fontWeight: 600, margin: 0 }}>{instData.expiration.daysToNextOpex} días</p>
+                  </div>
+                )}
+                {instData.metrics && (
+                  <div>
+                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Ownership inst.</p>
+                    <p style={{ fontWeight: 600, margin: 0 }}>{instData.metrics.fundsOwnershipPct.toFixed(1)}%</p>
+                  </div>
+                )}
+                {instData.metrics && (
+                  <div>
+                    <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Net Flow</p>
+                    <p style={{ fontWeight: 600, margin: 0, color: instData.metrics.netFlow >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      ${instData.metrics.netFlow.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "0 0 4px" }}>Fuentes</p>
+                  <p style={{ fontSize: "var(--font-size-xs)", margin: 0 }}>
+                    {instData.sourceReports.map((s) => (
+                      <span key={s.sourceId} style={{ marginRight: "var(--space-xs)" }}>
+                        {s.status === "ok" ? "✅" : s.status === "partial" ? "⚠️" : "❌"} {s.sourceId.split("_")[0]}
+                      </span>
+                    ))}
+                  </p>
+                </div>
               </div>
-            );
-          })()}
-
-          {/* ── Coming soon for Fundamental and News */}
-          {showFundamental && <ComingSoonBlock category="Fundamental" />}
-          {showNews && <ComingSoonBlock category="Noticias" />}
-        </div>
+              <p style={{ marginTop: "var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+                Haz clic en una fila de la tabla de confluencia para ver el detalle completo.
+              </p>
+            </>
+          )}
+        </section>
       )}
 
-      {!payload && !loading && (
-        <div style={{ textAlign: "center", padding: "4rem 2rem", color: "var(--color-text-muted)" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📊</div>
-          <p>Cargando datos de confluencia…</p>
-        </div>
-      )}
+      {/* ── Placeholder sections — reserved for other teams */}
+      <PlaceholderSection
+        title="Análisis Técnico Extendido"
+        description="Señales de indicadores técnicos avanzados, patrones de velas y análisis de estructura de mercado."
+      />
+      <PlaceholderSection
+        title="Análisis Fundamental"
+        description="Métricas financieras, earnings, valuación y comparativa sectorial."
+      />
+      <PlaceholderSection
+        title="Estrategias de Cobertura"
+        description="Análisis de opciones, estrategias de cobertura y PayoffChart interactivo."
+      />
+      <PlaceholderSection
+        title="Noticias y Sentimiento"
+        description="Sentimiento del mercado, noticias relevantes y análisis de redes sociales."
+      />
     </div>
   );
 
@@ -405,16 +272,12 @@ export function MainDashboard() {
         chatPanel={<ChatPanel />}
       />
 
-      {/* FIC: Evidence drawer — slide-in from right, opens on signal card click. */}
-      {/* FIC: Drawer de evidencia — desliza desde la derecha, se abre al clic en tarjeta de señal. */}
-      <Drawer
-        isOpen={evidenceDrawerOpen}
-        onClose={() => setEvidenceDrawerOpen(false)}
-        position="right"
-        title={evidenceSignal ? `Evidencia — ${evidenceSignal.instrument}` : "Evidencia"}
-      >
-        <SignalEvidencePanel evidence={evidenceSignal?.evidence ?? []} />
-      </Drawer>
+      <InstitutionalDetailModal
+        isOpen={instModalTicker !== null}
+        ticker={instModalTicker ?? ""}
+        data={instModalTicker ? (institutionalResults[instModalTicker.toUpperCase()] ?? null) : null}
+        onClose={() => setInstModalTicker(null)}
+      />
     </>
   );
 }

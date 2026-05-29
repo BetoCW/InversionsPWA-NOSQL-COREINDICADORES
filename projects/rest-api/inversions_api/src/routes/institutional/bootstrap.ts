@@ -19,6 +19,7 @@ import { ExpirationAnalysisEngine } from "../../modules/institutional/expiration
 import { parseSecEdgar13fReal, parseFinraShortInterestReal, ensureFinraCache } from "../../modules/institutional/realSourceParsers";
 import { parseYahooOptionsFlow } from "../../modules/institutional/yahooOptionsParser";
 import { parseYahooInstitutional } from "../../modules/institutional/yahooInstitutionalParser";
+import { getYahooSession } from "../../modules/institutional/yahooCrumbSession";
 
 // ─── Route context (singleton) ────────────────────────────────────────────────
 
@@ -69,9 +70,10 @@ export function getInstitutionalRouteContext(): InstitutionalRouteContext {
 
   const dataService = new InstitutionalDataService(sources);
 
-  // FIC: Pre-warm FINRA cache in background — does not block startup. (EN)
-  // FIC: Pre-calienta la caché FINRA en background — no bloquea el startup. (ES)
+  // FIC: Pre-warm FINRA cache and Yahoo session in background — first real request arrives with warm caches. (EN)
+  // FIC: Pre-calienta caché FINRA y sesión Yahoo en background — el primer request llega con cachés calientes. (ES)
   ensureFinraCache().catch(() => {});
+  getYahooSession().catch(() => {});
 
   _context = {
     dataService,
