@@ -153,7 +153,7 @@ export function ProjectionSimulationPanel({ projection }: Props) {
         <div>
           <h2 style={{ margin: 0 }}>Proyeccion de simulacion</h2>
           <p style={{ marginTop: "0.25rem", fontSize: "0.82rem" }}>
-            {projection.ticker} - {projection.strategy} - {projection.projectionFrom} {"->"} {projection.projectionTo}
+            {projection.ticker} - {projection.projectionFrom} {"->"} {projection.projectionTo}
           </p>
         </div>
         <div style={{

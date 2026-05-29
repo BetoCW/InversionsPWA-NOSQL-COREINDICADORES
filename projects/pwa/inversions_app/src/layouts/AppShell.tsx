@@ -81,18 +81,11 @@ export function AppShell({ activityBar, leftPanel, main, chatPanel }: AppShellPr
           data-testid="app-shell-chat-panel"
           style={{
             width: chatWidth,
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
+            flexShrink: 0,
             overflow: "hidden",
-            transform: chatPanelCollapsed ? "translateX(100%)" : "translateX(0)",
-            transition: "width 0.25s ease, transform 0.25s ease",
+            transition: "width 0.25s ease",
             background: "var(--color-surface)",
             borderLeft: "1px solid var(--color-border)",
-            boxShadow: chatPanelCollapsed ? "none" : "-16px 0 40px rgba(0, 0, 0, 0.32)",
-            pointerEvents: chatPanelCollapsed ? "none" : "auto",
-            zIndex: 30,
           }}
           className="app-shell-chat-panel"
         >

@@ -38,11 +38,68 @@ interface ScreenerResponse {
   results: ScreenerCandidate[];
   cache_status: "HIT" | "MISS" | "EXPIRED";
   cache_age_minutes: number;
+  constituents_source: string;
   assumptions: Record<string, any>;
 }
 
 // Simple in-memory cache
 const screenerCache = new Map<string, { data: ScreenerResponse; timestamp: Date }>();
+
+// S&P500 constituents cache (24h TTL — index changes rarely)
+const constituentCache: { tickers: string[]; source: string; timestamp: Date } | null = (null as any);
+let _constituentCache: typeof constituentCache = null;
+const CONSTITUENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function fetchSp500Constituents(): Promise<{ tickers: string[]; source: string }> {
+  if (_constituentCache && Date.now() - _constituentCache.timestamp.getTime() < CONSTITUENT_TTL_MS) {
+    return { tickers: _constituentCache.tickers, source: _constituentCache.source };
+  }
+
+  // FMP: /stable/sp500_constituent
+  const fmpKey = process.env.FMP_API_KEY;
+  if (fmpKey) {
+    try {
+      const res = await fetch(
+        `https://financialmodelingprep.com/stable/sp500_constituent?apikey=${fmpKey}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (res.ok) {
+        const data = await res.json() as Array<{ symbol: string }>;
+        if (Array.isArray(data) && data.length > 10) {
+          const tickers = data.map((d) => d.symbol).filter(Boolean);
+          _constituentCache = { tickers, source: "fmp", timestamp: new Date() };
+          return { tickers, source: "fmp" };
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // Finnhub: /api/v1/index/constituents?symbol=^GSPC
+  const finnhubKey = process.env.FINNHUB_API_KEY;
+  if (finnhubKey) {
+    try {
+      const res = await fetch(
+        `https://finnhub.io/api/v1/index/constituents?symbol=%5EGSPC&token=${finnhubKey}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (res.ok) {
+        const data = await res.json() as { constituents?: string[] };
+        if (Array.isArray(data.constituents) && data.constituents.length > 10) {
+          _constituentCache = { tickers: data.constituents, source: "finnhub", timestamp: new Date() };
+          return { tickers: data.constituents, source: "finnhub" };
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // Fallback hardcoded
+  const tickers = getHardcodedSp500();
+  return { tickers, source: "hardcoded_fallback" };
+}
 
 export function createSp500ScreenerRouter(supabaseClient: SupabaseClient): Router {
   const router = Router();
@@ -110,8 +167,8 @@ export function createSp500ScreenerRouter(supabaseClient: SupabaseClient): Route
       }
 
       // T007b: Implementar pipeline
-      // 1. Fetch S&P500 constituents (simulado)
-      const sp500Constituents = getSp500Constituents();
+      // 1. Fetch S&P500 constituents from API (FMP → Finnhub → hardcoded fallback)
+      const { tickers: sp500Constituents, source: constituentsSource } = await fetchSp500Constituents();
 
       // 2. Map to viabilityEngine → filter by minViability
       const candidatesWithScores = await Promise.all(
@@ -196,6 +253,7 @@ export function createSp500ScreenerRouter(supabaseClient: SupabaseClient): Route
         results,
         cache_status: cacheStatus,
         cache_age_minutes: cacheAgeMinutes,
+        constituents_source: constituentsSource,
         assumptions: {
           strategy_type: strategy,
           min_viability_threshold: minVia,
@@ -236,10 +294,9 @@ export function createSp500ScreenerRouter(supabaseClient: SupabaseClient): Route
 }
 
 /**
- * Helper: Retorna constituents del S&P500 (simulado)
- * En producción: fetch desde tabla Supabase
+ * Hardcoded fallback: used only when FMP and Finnhub are unavailable.
  */
-function getSp500Constituents(): string[] {
+function getHardcodedSp500(): string[] {
   return [
     "AAPL",
     "MSFT",

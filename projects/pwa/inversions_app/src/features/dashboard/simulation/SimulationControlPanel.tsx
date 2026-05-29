@@ -49,8 +49,6 @@ const FUNDAMENTAL_METRICS = [
 ] as const;
 
 const COMPARISON_OPTIONS = [
-  "Comparar con sector",
-  "Comparar con industria",
   "Comparar con S&P500"
 ] as const;
 
@@ -384,19 +382,6 @@ export function SimulationControlPanel({ ticket, onResult, onFundamentalRows, on
           </div>
 
           {/* Comparaciones */}
-          <div>
-            <p style={sectionLabelStyle}>Comparaciones</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {COMPARISON_OPTIONS.map((c) => (
-                <label key={c} style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer", fontSize: "0.82rem" }} onClick={() => toggleComparison(c)}>
-                  <span style={toggleStyle(comparisonsOn[c])}>
-                    <span style={toggleKnobStyle(comparisonsOn[c])} />
-                  </span>
-                  <span style={{ color: comparisonsOn[c] ? "var(--color-text)" : "var(--color-text-muted)" }}>{c}</span>
-                </label>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
