@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, CheckCircle2, KeyRound, Newspaper, Radio, RefreshCw, ShieldCheck } from "lucide-react";
-import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsProviderStatus, type NewsSourceInput } from "../../services/news/newsApi";
+import { analyzeNewsSources, getNewsConfluence, type NewsAnalysisAggregate, type NewsConfluenceResponse, type NewsProviderStatus, type NewsSourceInput, type AnalyzedNewsSource } from "../../services/news/newsApi";
 import { SourceInput } from "./SourceInput";
 import { SourceList } from "./SourceList";
 import { AnalysisResult } from "./AnalysisResult";
+import { NewsDetailModal } from "./NewsDetailModal";
 import "../styles/NewsSourcesAnalyzer.css";
 
 interface NewsSourcesAnalyzerProps {
   symbol?: string;
+  onArticleSelect?: (article: AnalyzedNewsSource) => void;
 }
 
 function ProviderPill({ provider }: { provider: NewsProviderStatus }) {
@@ -41,7 +43,7 @@ function ProviderStatusSummary({ providers }: { providers: NewsProviderStatus[] 
   );
 }
 
-export function NewsSourcesAnalyzer({ symbol = "SPY" }: NewsSourcesAnalyzerProps) {
+export function NewsSourcesAnalyzer({ symbol = "SPY", onArticleSelect }: NewsSourcesAnalyzerProps) {
   const normalizedSymbol = symbol.trim().toUpperCase() || "SPY";
   const [activeSymbol, setActiveSymbol] = useState(normalizedSymbol);
   const [sources, setSources] = useState<NewsSourceInput[]>([]);
@@ -49,6 +51,8 @@ export function NewsSourcesAnalyzer({ symbol = "SPY" }: NewsSourcesAnalyzerProps
   const [manualAnalysis, setManualAnalysis] = useState<NewsAnalysisAggregate | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedArticle, setSelectedArticle] = useState<AnalyzedNewsSource | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     setActiveSymbol(normalizedSymbol);
@@ -82,6 +86,14 @@ export function NewsSourcesAnalyzer({ symbol = "SPY" }: NewsSourcesAnalyzerProps
       setError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleArticleClick = (article: AnalyzedNewsSource) => {
+    setSelectedArticle(article);
+    setShowModal(true);
+    if (onArticleSelect) {
+      onArticleSelect(article);
     }
   };
 
@@ -158,6 +170,8 @@ export function NewsSourcesAnalyzer({ symbol = "SPY" }: NewsSourcesAnalyzerProps
           <AnalysisResult confluence={confluence} manualAnalysis={manualAnalysis} />
         </div>
       </div>
+
+      <NewsDetailModal isOpen={showModal} onClose={() => setShowModal(false)} article={selectedArticle} />
     </section>
   );
 }

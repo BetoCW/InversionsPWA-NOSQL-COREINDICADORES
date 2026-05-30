@@ -12,7 +12,10 @@ import {
 import type { InstitutionalAnalysisResponse } from "../../services/institutional/institutionalApi";
 import { OptionGreeksRow } from "./OptionGreeksRow";
 import { InstitutionalDetailModal } from "../institutional/InstitutionalDetailModal";
+import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import { ObservationsTab } from "./ObservationsTab";
+import { NewsDetailModal } from "../news/NewsDetailModal";
+import type { AnalyzedNewsSource } from "../../services/news/newsApi";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
@@ -85,10 +88,10 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
   const [modalTicker, setModalTicker] = useState<string | null>(null);
   const [modalResumen, setModalResumen] = useState<string>("");
   const [modalRow, setModalRow] = useState<ConfluenceSignalRow | null>(null);
+  const [newsArticle, setNewsArticle] = useState<AnalyzedNewsSource | null>(null);
+  const [showNewsModal, setShowNewsModal] = useState(false);
   const [stubCore, setStubCore] = useState<string | null>(null);
   const [stubResumen, setStubResumen] = useState<string>("");
-  // FIC: Full row stored for A_TECNICO structured detail panel. (EN)
-  // FIC: Fila completa almacenada para el panel de detalle estructurado de A_TECNICO. (ES)
   const [stubRow, setStubRow] = useState<ConfluenceSignalRow | null>(null);
 
   const { setSelectedSignal } = useSignalStore();
@@ -196,10 +199,30 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
                       symbol: row.ticket,
                       metadata: { evidencia_refs: row.evidencia_refs, core: row.core, subCore: row.subCore }
                     } as SelectedSignal);
+                  } else if (row.core === "A_NOTICIAS") {
+                    // Crear un artículo simulado desde la fila para abrir el modal de noticias
+                    const article: AnalyzedNewsSource = {
+                      id: row.subCore ?? row.ticket ?? "news",
+                      title: row.observacion?.objetivo ?? "Noticia",
+                      url: row.evidencia_refs?.[0] ?? undefined,
+                      provider: row.subCore ?? "Unknown",
+                      publishedAt: row.fecha ?? new Date().toISOString(),
+                      summary: row.observacion?.explicacion ?? "",
+                      rawText: row.observacion?.explicacion ?? "",
+                      sentiment: "neutral",
+                      sentimentScore: row.score ?? 0,
+                      confidence: row.peso ?? 0,
+                      credibilityScore: row.peso ?? 0,
+                      affectedSymbols: [row.ticket ?? ""],
+                      keywords: [],
+                      verdict: row.tipoSenal as any,
+                      rationale: row.observacion?.senal ?? ""
+                    };
+                    setNewsArticle(article);
+                    setShowNewsModal(true);
                   } else {
                     setStubCore(row.core);
                     setStubResumen(row.resumen_analisis ?? "");
-                    // FIC: Store full row for A_TECNICO structured panel; null for others. (EN)
                     setStubRow(row.core === "A_TECNICO" ? row : null);
                   }
                 };
@@ -413,6 +436,12 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
         resumen={modalResumen}
         signalRow={modalRow ?? undefined}
+      />
+
+      <NewsDetailModal
+        isOpen={showNewsModal}
+        onClose={() => { setShowNewsModal(false); setNewsArticle(null); }}
+        article={newsArticle}
       />
     </section>
   );

@@ -14,6 +14,7 @@ import {
   type SignalObservation,
   type Timeframe
 } from "./types";
+import { buildNewsConfluenceRows } from "../news/newsConfluenceRows";
 
 export interface CoreStubInput {
   ticket: string;
@@ -49,10 +50,11 @@ const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
 // FIC: A_IA aparece aqui solo cuando el LLM no respondio; el caller decide cuando llamarlo.
 // FIC: A_TECNICO removed — now served by buildTechnicalTable() in technicalTable.ts. (EN)
 // FIC: A_TECNICO removido — ahora servido por buildTechnicalTable() en technicalTable.ts. (ES)
+// FIC: A_NOTICIAS now generates real rows with buildNewsConfluenceRows() — 1 per article. (EN)
+// FIC: A_NOTICIAS ahora genera filas reales con buildNewsConfluenceRows() — 1 por artículo. (ES)
 const DEFAULT_STUB_CORES: CoreId[] = [
   "A_FUNDAMENTAL",
-  "A_INSTITUCIONAL",
-  "A_NOTICIAS"
+  "A_INSTITUCIONAL"
 ];
 
 function vigenciaIso(now: Date, timeframe: Timeframe): string {
@@ -124,13 +126,50 @@ function buildStubRow(
  * FIC: Emite filas DEGRADADA para cores no implementados (FR-016).
  * FIC: Emits DEGRADADA rows for cores not yet implemented.
  *
- * Default cubre A_FUNDAMENTAL, A_TECNICO, A_INSTITUCIONAL, A_NOTICIAS.
+ * Default cubre A_FUNDAMENTAL, A_INSTITUCIONAL.
+ * A_NOTICIAS es manejado por separado en buildCoreStubsWithNews.
  * Para incluir A_IA degradada, pasarlo explicitamente en `cores` (cuando el LLM no respondio).
  */
 export function buildCoreStubs(input: CoreStubInput): ConfluenceSignalRow[] {
   const cores = input.cores ?? DEFAULT_STUB_CORES;
   const computedAt = input.now ?? new Date();
   return cores.map((core) => buildStubRow(input, core, computedAt));
+}
+
+/**
+ * FIC: Versión extendida que incluye A_NOTICIAS con filas reales (1 por artículo).
+ * FIC: Extended version that includes A_NOTICIAS with real rows (1 per article).
+ */
+export async function buildCoreStubsWithNews(input: CoreStubInput): Promise<ConfluenceSignalRow[]> {
+  const cores = input.cores ?? DEFAULT_STUB_CORES;
+  const computedAt = input.now ?? new Date();
+  
+  // Separar A_NOTICIAS del resto
+  const stubCores = cores.filter((c) => c !== "A_NOTICIAS");
+  const stubRows = stubCores.map((core) => buildStubRow(input, core, computedAt));
+
+  // Si se pide A_NOTICIAS, generar filas reales
+  const hasNews = cores.includes("A_NOTICIAS");
+  let newsRows: ConfluenceSignalRow[] = [];
+  if (hasNews) {
+    try {
+      newsRows = await buildNewsConfluenceRows({
+        ticket: input.ticket,
+        timeframe: input.timeframe,
+        precio: 0,
+        sourceInputHash: input.sourceInputHash,
+        previousRows: input.previousRows,
+        now: computedAt,
+        limit: 8
+      });
+    } catch (err) {
+      // Si falla obtener noticias, emitir stub degradado
+      console.warn(`Error loading news for ${input.ticket}:`, err);
+      newsRows = [buildStubRow(input, "A_NOTICIAS", computedAt)];
+    }
+  }
+
+  return [...stubRows, ...newsRows];
 }
 
 /**

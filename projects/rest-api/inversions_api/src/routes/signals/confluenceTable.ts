@@ -3,7 +3,7 @@
 
 import { Router } from "express";
 import { buildIndicatorsTable } from "../../modules/indicators/confluenceTable";
-import { buildCoreStubs } from "../../modules/indicators/coreStubs";
+import { buildCoreStubs, buildCoreStubsWithNews } from "../../modules/indicators/coreStubs";
 import { computeConfluence } from "../../modules/indicators/confluence";
 import { getCandles, isSupportedTimeframe } from "../../modules/indicators/ohlcSource";
 import { respondError } from "../../modules/indicators/errors";
@@ -76,15 +76,21 @@ confluenceTableRouter.get("/confluence-table", async (req, res) => {
   const stubCores = (["A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"] as CoreId[])
     .filter((c) => !coresFilter || coresFilter.includes(c));
   if (stubCores.length > 0) {
-    rows = [
-      ...rows,
-      ...buildCoreStubs({
-        ticket,
-        timeframe,
-        cores: stubCores,
-        sourceInputHash: verdict.source_input_hash
-      })
-    ];
+    const wantsNews = stubCores.includes("A_NOTICIAS");
+    const stubsResult = wantsNews
+      ? await buildCoreStubsWithNews({
+          ticket,
+          timeframe,
+          cores: stubCores,
+          sourceInputHash: verdict.source_input_hash
+        })
+      : buildCoreStubs({
+          ticket,
+          timeframe,
+          cores: stubCores,
+          sourceInputHash: verdict.source_input_hash
+        });
+    rows = [...rows, ...stubsResult];
   }
 
   return res.status(200).json({

@@ -285,9 +285,6 @@ export function MainDashboard() {
       ) : (
         <>
           <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} activeStrategy={activeSimulationStrategy} />
-          
-          {/* ── News Section — muestra análisis de noticias reales */}
-          <NewsSection symbol={selectedSymbol} />
         </>
       )}
 
@@ -453,10 +450,8 @@ export function MainDashboard() {
         title="Análisis Fundamental"
         description="Métricas financieras, earnings, valuación y comparativa sectorial."
       />
-      <PlaceholderSection
-        title="Noticias y Sentimiento"
-        description="Sentimiento del mercado, noticias relevantes y análisis de redes sociales."
-      />
+      {/* ── News Section — muestra análisis de noticias reales */}
+      <NewsSection symbol={selectedSymbol} />
     </div>
   );
 

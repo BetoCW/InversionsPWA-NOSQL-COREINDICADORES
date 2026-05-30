@@ -1,26 +1,12 @@
 .tnmt-news-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: calc(var(--radius-lg) + 6px);
-  background:
-    radial-gradient(circle at top left, rgba(73, 79, 223, 0.28), transparent 34%),
-    radial-gradient(circle at 85% 10%, rgba(20, 184, 166, 0.18), transparent 32%),
-    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.94));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   padding: var(--space-lg);
   display: grid;
   gap: var(--space-lg);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
-}
-
-.tnmt-news-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-  background-size: 42px 42px;
-  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent 72%);
 }
 
 .tnmt-news-panel > * {
@@ -52,10 +38,11 @@
 .tnmt-result-block h3,
 .tnmt-article-card h4 {
   margin: 0;
+  color: var(--color-text);
 }
 
 .tnmt-news-hero h2 {
-  font-size: clamp(1.6rem, 2.6vw, 2.35rem);
+  font-size: 1.6rem;
   letter-spacing: -0.04em;
   line-height: 1.05;
 }
@@ -69,6 +56,7 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   line-height: 1.55;
+  margin: 0.5rem 0 0;
 }
 
 .tnmt-eyebrow {
@@ -94,13 +82,17 @@
   flex-wrap: wrap;
 }
 
+.tnmt-hero-stats {
+  margin-top: var(--space-md);
+}
+
 .tnmt-hero-stats span {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--color-surface-raised);
   color: var(--color-text);
   font-size: var(--font-size-xs);
   font-weight: 700;
@@ -114,10 +106,9 @@
 .tnmt-article-card,
 .tnmt-provider-pill,
 .tnmt-no-data {
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(12px);
 }
 
 .tnmt-symbol-box {
@@ -139,22 +130,21 @@
 .tnmt-symbol-box input {
   width: 100%;
   box-sizing: border-box;
-  background: rgba(2, 6, 23, 0.55);
+  background: var(--color-surface);
   color: var(--color-text);
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 0.72rem 0.85rem;
   font: inherit;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .tnmt-input:focus,
 .tnmt-textarea:focus,
 .tnmt-symbol-box input:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(73, 79, 223, 0.18);
-  background: rgba(2, 6, 23, 0.75);
+  background: var(--color-surface);
 }
 
 .tnmt-textarea {
@@ -168,9 +158,9 @@
 .tnmt-source-item button,
 .tnmt-segmented button,
 .tnmt-primary-button {
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
   padding: 0.62rem 0.9rem;
@@ -188,8 +178,8 @@
 .tnmt-segmented button:hover,
 .tnmt-primary-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--color-accent);
+  background: var(--color-surface-raised);
 }
 
 .tnmt-news-actions button:disabled,
@@ -201,15 +191,15 @@
 
 .tnmt-primary-button,
 .tnmt-segmented button.is-active {
-  background: linear-gradient(135deg, var(--color-accent), #22c55e);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 12px 28px rgba(73, 79, 223, 0.22);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #000;
 }
 
 .tnmt-provider-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-sm);
 }
 
 .tnmt-provider-pill {
@@ -225,10 +215,11 @@
 
 .tnmt-provider-pill strong {
   font-size: var(--font-size-sm);
+  color: var(--color-text);
 }
 
 .tnmt-provider-pill.is-online {
-  border-color: rgba(34, 197, 94, 0.45);
+  border-color: var(--color-buy);
 }
 
 .tnmt-provider-pill.is-online strong {
@@ -236,7 +227,7 @@
 }
 
 .tnmt-provider-pill.is-warning {
-  border-color: rgba(245, 158, 11, 0.5);
+  border-color: var(--color-warning);
 }
 
 .tnmt-provider-pill.is-warning strong {
@@ -244,12 +235,12 @@
 }
 
 .tnmt-provider-pill.is-offline {
-  opacity: 0.72;
+  opacity: 0.62;
 }
 
 .tnmt-news-grid {
   display: grid;
-  grid-template-columns: minmax(290px, 0.78fr) minmax(360px, 1.22fr);
+  grid-template-columns: 1fr;
   gap: var(--space-lg);
 }
 
@@ -266,7 +257,7 @@
 }
 
 .tnmt-result-block--featured {
-  border-color: rgba(73, 79, 223, 0.42);
+  border-color: var(--color-accent);
 }
 
 .tnmt-source-item {
@@ -274,7 +265,7 @@
   justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-sm) 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-top: 1px solid var(--color-border);
 }
 
 .tnmt-source-item p {
@@ -292,12 +283,13 @@
 .tnmt-verdict,
 .tnmt-tags span,
 .tnmt-mini-grid span {
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   padding: 0.3rem 0.65rem;
   font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  background: rgba(2, 6, 23, 0.28);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
 }
 
 .tnmt-score {
