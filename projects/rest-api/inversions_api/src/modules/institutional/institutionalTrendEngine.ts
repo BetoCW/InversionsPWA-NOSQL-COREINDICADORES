@@ -80,14 +80,30 @@ export class InstitutionalTrendEngine {
     }
 
     const candles = realCandles;
+    console.log(
+      "[TrendEngine] candles received:", realCandles.length,
+      "using:", candles.length > 0 ? "real" : "fallback"
+    );
+
     const closes = candles.map((c) => c.close);
     const volumes = candles.map((c) => c.volume);
 
     const sma50Series = computeSma(closes, FAST_MA);
     const sma200Series = computeSma(closes, SLOW_MA);
 
-    const lastSma50 = lastValid(sma50Series) ?? 0;
-    const lastSma200 = lastValid(sma200Series) ?? 0;
+    const meanClose = closes.length > 0
+      ? closes.reduce((s, p) => s + p, 0) / closes.length
+      : 0;
+
+    // FIC: If fewer candles than the period, use mean of available closes instead of 0. (EN)
+    // FIC: Si hay menos velas que el período, usa la media de las velas disponibles en lugar de 0. (ES)
+    const lastSma50 = closes.length >= FAST_MA
+      ? (lastValid(sma50Series) ?? meanClose)
+      : closes.length > 0 ? meanClose : 0;
+
+    const lastSma200 = closes.length >= SLOW_MA
+      ? (lastValid(sma200Series) ?? meanClose)
+      : closes.length > 0 ? meanClose : 0;
 
     const crossover = this.detectCrossover(sma50Series, sma200Series);
 
