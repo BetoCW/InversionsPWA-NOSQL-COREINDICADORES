@@ -3,7 +3,7 @@
 
 import { computeConfluence } from "../indicators/confluence";
 import { buildIndicatorsTable } from "../indicators/confluenceTable";
-import { buildCoreStubs } from "../indicators/coreStubs";
+import { buildCoreStubs, buildCoreStubsWithNews } from "../indicators/coreStubs";
 import { getCandles, intervalMs, isSupportedTimeframe } from "../indicators/ohlcSource";
 import {
   ALGORITHM_VERSION,
@@ -42,10 +42,8 @@ export const KNOWN_ESTRATEGIAS = new Set<string>([
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
-  "LONG_CALL",
-  "LONG_PUT",
-  "SHORT_CALL",
-  "SHORT_PUT",
+  "BULL_PUT_SPREAD",
+  "BEAR_CALL_SPREAD",
   "BUY_CALL",
   "BUY_PUT",
   "SELL_CALL",
@@ -255,14 +253,24 @@ export async function runSimulation(
     });
 
   if (stubCores.length > 0) {
-    const stubs = buildCoreStubs({
-      ticket: request.ticket,
-      timeframe: request.temporalidad,
-      cores: stubCores,
-      sourceInputHash: verdict.source_input_hash,
-      previousRows: deps.previousRows,
-      now: computedAt
-    });
+    const wantsNews = stubCores.includes("A_NOTICIAS");
+    const stubs = wantsNews
+      ? await buildCoreStubsWithNews({
+          ticket: request.ticket,
+          timeframe: request.temporalidad,
+          cores: stubCores,
+          sourceInputHash: verdict.source_input_hash,
+          previousRows: deps.previousRows,
+          now: computedAt
+        })
+      : buildCoreStubs({
+          ticket: request.ticket,
+          timeframe: request.temporalidad,
+          cores: stubCores,
+          sourceInputHash: verdict.source_input_hash,
+          previousRows: deps.previousRows,
+          now: computedAt
+        });
     table = [...table, ...institutionalRows, ...tecnicoRows, ...stubs];
   } else {
     table = [...table, ...institutionalRows, ...tecnicoRows];

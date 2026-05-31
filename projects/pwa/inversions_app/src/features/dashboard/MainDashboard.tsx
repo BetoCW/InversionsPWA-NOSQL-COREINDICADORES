@@ -11,21 +11,24 @@ import { TimeControls } from "./TimeControls";
 import { ConfluenceSignalsTable } from "./ConfluenceSignalsTable";
 import { SimulationControlPanel } from "./simulation/SimulationControlPanel";
 import { SimulatorStrategySection } from "./simulation/SimulatorStrategySection";
-import { FundamentalAnalysisPanel } from "./FundamentalAnalysisPanel";
 import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
-import type { OptionStrategyAnalysis } from "./simulation/OptionStrategyParamsModal";
+// FIC: WheelModalParams for lifting confirmed Wheel state up to dashboard. (EN)
+// FIC: WheelModalParams para elevar el estado Wheel confirmado al dashboard. (ES)
 import type { WheelModalParams } from "./simulation/WheelParamsModal";
+import type { SpreadModalParams } from "./simulation/SpreadParamsModal";
+// FIC: Real Technical Analysis Extended panel — replaces placeholder. (EN)
 import { TechnicalAnalysisExtendedSection } from "./TechnicalAnalysisExtendedSection";
+import { NewsSection } from "./NewsSection";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
 import { Badge } from "../../components/ui/Badge";
 import type { ConfluenceSignalRow, SimulationResponse, CoreId } from "../../services/signals/confluenceTableApi";
+import type { NewsDateRange } from "../../services/news/newsApi";
 import { useSignalStore } from "../../store/signals";
 import { useAppShellStore } from "../../store/appShell";
 import { useInstitutionalStore, setInstitutionalLoading, setInstitutionalResult, setInstitutionalError } from "../../store/institutional";
 import { getInstitutionalAnalysis } from "../../services/institutional/institutionalApi";
-import type { FundamentalAnalysisResponse } from "../../services/fundamental/fundamentalApi";
 import { formatCurrency } from "../../utils/format";
 import { Tooltip } from "../../components/ui/Tooltip";
 
@@ -36,17 +39,16 @@ export function MainDashboard() {
   const [simulationRows, setSimulationRows] = useState<ConfluenceSignalRow[] | undefined>(undefined);
   const [simulationVerdict, setSimulationVerdict] = useState<{ verdict?: unknown; score?: number; degraded?: boolean } | null>(null);
   const [activeSimulationStrategy, setActiveSimulationStrategy] = useState("IRON_CONDOR");
+  const [newsDateRange, setNewsDateRange] = useState<NewsDateRange | undefined>(undefined);
   const [coverageRequest, setCoverageRequest] = useState<{ params: CoverageModalParams; kind: string } | null>(null);
-  const [optionStrategyAnalysis, setOptionStrategyAnalysis] = useState<OptionStrategyAnalysis | null>(null);
-  const [fundamentalAnalysis, setFundamentalAnalysis] = useState<FundamentalAnalysisResponse | null>(null);
-  const [fundamentalAutoRunKey, setFundamentalAutoRunKey] = useState(0);
+  // FIC: Last confirmed Wheel params — shown as read-only summary in SimulatorStrategySection. (EN)
+  // FIC: Últimos params Wheel confirmados — mostrados como resumen de solo lectura en SimulatorStrategySection. (ES)
   const [wheelSummary, setWheelSummary] = useState<WheelModalParams | null>(null);
-  const [termResult, setTermResult] = useState<any | null>(null);
+  const [spreadRequest, setSpreadRequest] = useState<{ params: SpreadModalParams; kind: string } | null>(null);
   const [institutionalCoreWasActive, setInstitutionalCoreWasActive] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedStrikeData, setSelectedStrikeData] = useState<{
     strike: number; type: "call" | "put"; premium: number; iv: number;
-    expiration?: string; underlyingPrice?: number; estimatedRiskFreeRate?: number;
   } | null>(null);
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
 
@@ -65,14 +67,8 @@ export function MainDashboard() {
       setSimulationRows(undefined);
       setSimulationVerdict(null);
       setInstitutionalCoreWasActive(false);
-      setOptionStrategyAnalysis(null);
-      setFundamentalAnalysis(null);
-      setWheelSummary(null);
-      setTermResult(null);
-      setSelectedStrikeData(null);
-      setSelectedStrike(undefined);
     }
-  }, [selectedSymbol, setSelectedStrike]);
+  }, [selectedSymbol]);
 
   const handleSimulationResult = useCallback((result: SimulationResponse) => {
     setSimulationRows(result.table);
@@ -84,38 +80,26 @@ export function MainDashboard() {
     []
   );
 
-  const handleOptionStrategyCalculated = useCallback((analysis: OptionStrategyAnalysis) => {
-    setOptionStrategyAnalysis(analysis);
-    setActiveSimulationStrategy(analysis.strategy);
-  }, []);
+  // FIC: Lift confirmed Wheel params to dashboard state for summary panel. (EN)
+  // FIC: Eleva los params Wheel confirmados al estado del dashboard para el panel de resumen. (ES)
+  const handleWheelConfirmed = useCallback(
+    (params: WheelModalParams) => setWheelSummary(params),
+    []
+  );
 
-  const handleWheelConfirmed = useCallback((params: WheelModalParams) => {
-    setWheelSummary(params);
-  }, []);
-
-  const handleTermResult = useCallback((data: any) => {
-    setTermResult(data);
-  }, []);
+  const handleSpreadConfirmed = useCallback(
+    (params: SpreadModalParams, kind: string) => setSpreadRequest({ params, kind }),
+    []
+  );
 
   // FIC: Writes selected strike to global store so CoverageStrategyModal can read it from anywhere. (EN)
   // FIC: Escribe el strike seleccionado en el store global para que CoverageStrategyModal lo lea desde cualquier lugar. (ES)
   const handleStrikeSelect = useCallback(
-    (
-      strike: number,
-      type: "call" | "put",
-      premium: number,
-      iv: number,
-      meta?: {
-        expiration: string;
-        underlyingPrice: number;
-        callPremium: number;
-        putPremium: number;
-        estimatedRiskFreeRate?: number;
-      }
-    ) => {
-      const selected = { strike, type, premium, iv, ...meta };
-      setSelectedStrikeData(selected);
-      setSelectedStrike(selected);
+    (strike: number, type: "call" | "put", premium: number, iv: number) => {
+      // TEMP-LOG [Punto 2 — MainDashboard] valor recibido del callback
+      console.log("[WHEEL-AUDIT][2-MainDashboard] handleStrikeSelect →", { strike, type, premium, iv });
+      setSelectedStrikeData({ strike, type, premium, iv });
+      setSelectedStrike({ strike, type, premium, iv });
     },
     [setSelectedStrike]
   );
@@ -125,10 +109,6 @@ export function MainDashboard() {
   const handleSimulationExecute = useCallback((activeCoreIds: CoreId[]) => {
     const institutionalActive = activeCoreIds.includes("A_INSTITUCIONAL");
     setInstitutionalCoreWasActive(institutionalActive);
-
-    if (activeCoreIds.includes("A_FUNDAMENTAL")) {
-      setFundamentalAutoRunKey((key) => key + 1);
-    }
 
     // Activate institutional columns in the confluence table immediately
     if (institutionalActive) setAnalysisCategory("institutional");
@@ -286,10 +266,10 @@ export function MainDashboard() {
         onResult={handleSimulationResult}
         onExecute={handleSimulationExecute}
         onStrategyChange={setActiveSimulationStrategy}
+        onSimulationRangeChange={setNewsDateRange}
         onCoverageParamsConfirmed={handleCoverageConfirmed}
-        onOptionStrategyCalculated={handleOptionStrategyCalculated}
         onWheelParamsConfirmed={handleWheelConfirmed}
-        onTermResult={handleTermResult}
+        onSpreadParamsConfirmed={handleSpreadConfirmed}
       />
 
       {/* ── Simulation verdict */}
@@ -314,12 +294,9 @@ export function MainDashboard() {
           </p>
         </section>
       ) : (
-        <ConfluenceSignalsTable
-          symbol={selectedSymbol}
-          rows={simulationRows}
-          activeStrategy={activeSimulationStrategy}
-          fundamentalAnalysis={fundamentalAnalysis}
-        />
+        <>
+          <ConfluenceSignalsTable symbol={selectedSymbol} rows={simulationRows} activeStrategy={activeSimulationStrategy} />
+        </>
       )}
 
       {/* ── Institutional analysis section */}
@@ -473,23 +450,20 @@ export function MainDashboard() {
           ticker={selectedSymbol}
           activeStrategy={activeSimulationStrategy}
           coverageRequest={coverageRequest}
-          optionStrategyAnalysis={optionStrategyAnalysis}
+          spreadRequest={spreadRequest}
           wheelSummary={wheelSummary}
-          termResult={termResult}
         />
       )}
 
       {/* ── Placeholder sections — reserved for other teams */}
+      {/* FIC: Replaced placeholder with real TechnicalAnalysisExtendedSection. (EN) */}
       <TechnicalAnalysisExtendedSection symbol={selectedSymbol} timeframe={timeframe} />
-      <FundamentalAnalysisPanel
-        optionStrategyAnalysis={optionStrategyAnalysis}
-        autoRunKey={fundamentalAutoRunKey}
-        onAnalysisComplete={setFundamentalAnalysis}
-      />
       <PlaceholderSection
-        title="Noticias y Sentimiento"
-        description="Sentimiento del mercado, noticias relevantes y análisis de redes sociales."
+        title="Análisis Fundamental"
+        description="Métricas financieras, earnings, valuación y comparativa sectorial."
       />
+      {/* ── News Section — muestra análisis de noticias reales */}
+      <NewsSection symbol={selectedSymbol} dateRange={newsDateRange} />
     </div>
   );
 

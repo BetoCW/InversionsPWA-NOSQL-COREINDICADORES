@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   BarChart2, BookOpen, TrendingUp, Building2, Newspaper,
   Cpu, Play, ChevronDown, Calendar,
@@ -16,13 +16,8 @@ import {
 } from "../../../services/signals/confluenceTableApi";
 import { TermStrategyModal, type TermStrategyParams } from "./TermStrategyModal";
 import { CoverageParamsModal, type CoverageModalParams } from "./CoverageParamsModal";
-import {
-  OptionStrategyParamsModal,
-  OPTION_STRATEGY_OPTIONS,
-  type CoreOptionStrategy,
-  type OptionStrategyAnalysis,
-} from "./OptionStrategyParamsModal";
 import { WheelParamsModal, type WheelModalParams } from "./WheelParamsModal";
+import { SpreadParamsModal, type SpreadModalParams } from "./SpreadParamsModal";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -266,7 +261,7 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
 }
 
 // ─── Custom select dropdown ────────────────────────────────────────────────────
-interface SelectOption { value: string; label: string }
+interface SelectOption { value: string; label: string; disabled?: boolean }
 
 function CustomSelect({
   value,
@@ -329,8 +324,10 @@ function CustomSelect({
               key={opt.value}
               role="option"
               aria-selected={value === opt.value}
+              aria-disabled={opt.disabled}
               className={`sim-dd-item${value === opt.value ? " active" : ""}`}
-              onPointerDown={() => { onChange(opt.value); setOpen(false); }}
+              onPointerDown={() => { if (!opt.disabled) { onChange(opt.value); setOpen(false); } }}
+              style={opt.disabled ? { opacity: 0.55, cursor: "default", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" } : undefined}
             >
               {opt.label}
             </div>
@@ -449,11 +446,11 @@ function ChipButton({
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
-const CORE_OPTION_STRATEGIES = new Set<string>(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
+const SPREAD_STRATEGIES = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
 function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
-function isCoreOptionStrategy(e: string): e is CoreOptionStrategy { return CORE_OPTION_STRATEGIES.has(e); }
 function isWheelStrategy(e: string)    { return e === "WHEEL"; }
+function isSpreadStrategy(e: string)   { return SPREAD_STRATEGIES.has(e); }
 
 const DEFAULT_TERM_PARAMS: TermStrategyParams = {
   optionStyle: "CALL",
@@ -463,8 +460,6 @@ const DEFAULT_TERM_PARAMS: TermStrategyParams = {
   expirationLong: new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10),
   premiumShort: 0,
   premiumLong: 0,
-  shortIv: 0.25,
-  longIv: 0.30,
   contracts: 1,
   riskFreeRate: 0.05,
 };
@@ -475,6 +470,17 @@ const DEFAULT_COVERAGE_PARAMS: CoverageModalParams = {
   riskTolerancePct: 0.05,
 };
 
+const DEFAULT_SPREAD_PARAMS: SpreadModalParams = {
+  currentPrice: 0,
+  longStrike: 0,
+  shortStrike: 0,
+  longPremium: 0,
+  shortPremium: 0,
+  contracts: 1,
+};
+
+// FIC: Default params for Wheel modal — isolated from CoverageModalParams. (EN)
+// FIC: Parámetros por defecto para el modal Wheel — aislados de CoverageModalParams. (ES)
 const DEFAULT_WHEEL_PARAMS: WheelModalParams = {
   csp: {
     ticker: "",
@@ -499,11 +505,15 @@ const TIMEFRAMES: Array<"1m" | "5m" | "15m" | "1h" | "4h" | "1d"> = ["1m", "5m",
 
 const PRESET_OPTIONS: SelectOption[]    = PRESETS.map((p) => ({ value: p, label: p }));
 const TIMEFRAME_OPTIONS: SelectOption[] = TIMEFRAMES.map((t) => ({ value: t, label: t }));
-const OPTION_STRATEGY_LABELS = new Map(OPTION_STRATEGY_OPTIONS.map((strategy) => [strategy.value, strategy.label]));
-const STRATEGY_OPTIONS: SelectOption[] = CANONICAL_ESTRATEGIAS.map((strategy) => ({
-  value: strategy,
-  label: OPTION_STRATEGY_LABELS.get(strategy as CoreOptionStrategy) ?? strategy.replace(/_/g, " "),
-}));
+const STRATEGY_OPTIONS: SelectOption[]  = [
+  { value: "BULL_CALL_SPREAD", label: "Bull Call" },
+  { value: "BEAR_PUT_SPREAD", label: "Bear Put" },
+  { value: "BULL_PUT_SPREAD", label: "Bull Put" },
+  { value: "BEAR_CALL_SPREAD", label: "Bear Call" },
+  ...CANONICAL_ESTRATEGIAS
+    .filter((s) => !["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"].includes(s))
+    .map((s) => ({ value: s, label: s.replace(/_/g, " ") })),
+];
 
 function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
 function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
@@ -526,10 +536,12 @@ interface Props {
   onResult: (result: SimulationResponse) => void;
   onExecute?: (activeCoreIds: CoreId[]) => void;
   onStrategyChange?: (estrategia: string) => void;
+  onSimulationRangeChange?: (range: { from: string; to: string }) => void;
   onCoverageParamsConfirmed?: (params: CoverageModalParams, kind: string) => void;
-  onOptionStrategyCalculated?: (analysis: OptionStrategyAnalysis) => void;
+  // FIC: Callback fired when user clicks "Analizar Wheel" — lifts params to MainDashboard. (EN)
+  // FIC: Callback al hacer click en "Analizar Wheel" — sube params a MainDashboard. (ES)
   onWheelParamsConfirmed?: (params: WheelModalParams) => void;
-  onTermResult?: (data: any) => void;
+  onSpreadParamsConfirmed?: (params: SpreadModalParams, kind: string) => void;
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -538,10 +550,10 @@ export function SimulationControlPanel({
   onResult,
   onExecute,
   onStrategyChange,
+  onSimulationRangeChange,
   onCoverageParamsConfirmed,
-  onOptionStrategyCalculated,
   onWheelParamsConfirmed,
-  onTermResult,
+  onSpreadParamsConfirmed,
 }: Props) {
   const [preset, setPreset]               = useState<Preset>("3M");
   const [estrategiaFrom, setEstrategiaFrom] = useState(isoToday());
@@ -561,17 +573,12 @@ export function SimulationControlPanel({
   const [termParams, setTermParams]       = useState<TermStrategyParams>(DEFAULT_TERM_PARAMS);
   const [coverageModalOpen, setCoverageModalOpen] = useState(false);
   const [coverageParams, setCoverageParams]       = useState<CoverageModalParams>(DEFAULT_COVERAGE_PARAMS);
-  const [optionParamsModalOpen, setOptionParamsModalOpen] = useState(false);
-  const [optionParamsStrategy, setOptionParamsStrategy] = useState<CoreOptionStrategy>("LONG_CALL");
-  const [wheelModalOpen, setWheelModalOpen] = useState(false);
-  const [wheelParams, setWheelParams] = useState<WheelModalParams>({
-    ...DEFAULT_WHEEL_PARAMS,
-    csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket },
-  });
-
-  useEffect(() => {
-    setWheelParams((prev) => ({ ...prev, csp: { ...prev.csp, ticker: ticket } }));
-  }, [ticket]);
+  const [spreadModalOpen, setSpreadModalOpen]     = useState(false);
+  const [spreadParams, setSpreadParams]           = useState<SpreadModalParams>(DEFAULT_SPREAD_PARAMS);
+  // FIC: Wheel modal state — independent from Coverage modal state. (EN)
+  // FIC: Estado del modal Wheel — independiente del estado del modal Coverage. (ES)
+  const [wheelModalOpen, setWheelModalOpen]       = useState(false);
+  const [wheelParams, setWheelParams]             = useState<WheelModalParams>({ ...DEFAULT_WHEEL_PARAMS, csp: { ...DEFAULT_WHEEL_PARAMS.csp, ticker: ticket } });
 
   useEffect(() => {
     if (!coverageModalOpen || coverageParams.currentPrice > 0) return;
@@ -584,6 +591,18 @@ export function SimulationControlPanel({
   }, [coverageModalOpen, ticket, coverageParams.currentPrice]);
 
   useEffect(() => {
+    if (!spreadModalOpen || spreadParams.currentPrice > 0) return;
+    getMarketQuotes([ticket])
+      .then((data) => {
+        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
+        if (q && q.price > 0) setSpreadParams((prev) => ({ ...prev, currentPrice: q.price }));
+      })
+      .catch(() => { /* user can enter manually */ });
+  }, [spreadModalOpen, ticket, spreadParams.currentPrice]);
+
+  // FIC: Fetch current price when Wheel modal opens, same pattern as Coverage modal. (EN)
+  // FIC: Obtiene el precio actual al abrir el modal Wheel, mismo patrón que Coverage. (ES)
+  useEffect(() => {
     if (!wheelModalOpen || wheelParams.csp.currentPrice > 0) return;
     getMarketQuotes([ticket])
       .then((data) => {
@@ -593,48 +612,19 @@ export function SimulationControlPanel({
       .catch(() => { /* user can enter manually */ });
   }, [wheelModalOpen, ticket, wheelParams.csp.currentPrice]);
 
-  // Sync term params dates from dashboard date range
   useEffect(() => {
-    setTermParams((prev) => ({
-      ...prev,
-      expirationShort: estrategiaFrom,
-      expirationLong: estrategiaTo,
-    }));
-  }, [estrategiaFrom, estrategiaTo]);
-
-  const handleTermDatesCorrected = useCallback(
-    (short: string, long: string) => {
-      setEstrategiaFrom(short);
-      setEstrategiaTo(long);
-    },
-    []
-  );
-
-  // Fetch current price for term modal when it opens
-  useEffect(() => {
-    if (!termModalOpen || coverageParams.currentPrice > 0) return;
-    getMarketQuotes([ticket])
-      .then((data) => {
-        const q = data.quotes.find((qt) => qt.symbol === ticket.toUpperCase());
-        if (q && q.price > 0) setCoverageParams((prev) => ({ ...prev, currentPrice: q.price }));
-      })
-      .catch(() => {});
-  }, [termModalOpen, ticket, coverageParams.currentPrice]);
+    onSimulationRangeChange?.({ from: estrategiaFrom, to: estrategiaTo });
+  }, [estrategiaFrom, estrategiaTo, onSimulationRangeChange]);
 
   const handleEstrategiaChange = (e: string) => {
     setEstrategia(e);
     onStrategyChange?.(e);
-
-    if (isCoreOptionStrategy(e)) {
-      setOptionParamsStrategy(e);
-      setOptionParamsModalOpen(true);
-    } else if (isTermStrategy(e)) {
-      setTermModalOpen(true);
-    } else if (isCoverageStrategy(e)) {
-      setCoverageModalOpen(true);
-    } else if (isWheelStrategy(e)) {
-      setWheelModalOpen(true);
-    }
+    if (isTermStrategy(e))          setTermModalOpen(true);
+    else if (isCoverageStrategy(e)) setCoverageModalOpen(true);
+    else if (isSpreadStrategy(e))   setSpreadModalOpen(true);
+    // FIC: Wheel opens its own independent modal — does not touch Coverage flow. (EN)
+    // FIC: Wheel abre su propio modal independiente — no toca el flujo de Coverage. (ES)
+    else if (isWheelStrategy(e))    setWheelModalOpen(true);
   };
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
@@ -646,7 +636,7 @@ export function SimulationControlPanel({
     const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
     onExecute?.(activeCoreIds);
     try {
-      const simPayload: SimulationRequestPayload = {
+      const payload: SimulationRequestPayload = {
         ticket,
         rangoHistorico: preset,
         rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
@@ -657,70 +647,7 @@ export function SimulationControlPanel({
         estrategia,
         toleranciaRiesgo: tolerancia,
       };
-
-      if (isTermStrategy(estrategia)) {
-        const strategyType = estrategia === "CALENDAR_SPREAD" ? "calendar" : "diagonal";
-        const optionStyle  = termParams.optionStyle.toLowerCase();
-        const endpoint     = `/api/v1/strategies/term/${strategyType}/${optionStyle}`;
-
-        const shortDte = Math.max(1, Math.round(
-          (new Date(termParams.expirationShort).getTime() - Date.now()) / 86_400_000
-        ));
-        const longDte = Math.max(1, Math.round(
-          (new Date(termParams.expirationLong).getTime() - Date.now()) / 86_400_000
-        ));
-        const ivCurve = [
-          { dte: shortDte, iv: termParams.shortIv > 0 ? termParams.shortIv : 0.25 },
-          { dte: longDte,  iv: termParams.longIv  > 0 ? termParams.longIv  : 0.30 },
-        ];
-
-        const termBody = {
-          underlying: ticket,
-          riskFreeRate: termParams.riskFreeRate,
-          ivCurve,
-          riskTolerance: tolerancia,
-          legs: [
-            {
-              strike:      termParams.strikeShort || termParams.strikeLong,
-              expiration:  termParams.expirationShort,
-              premium:     termParams.premiumShort,
-              contracts:   termParams.contracts,
-              optionStyle,
-            },
-            {
-              strike:      termParams.strikeLong || termParams.strikeShort,
-              expiration:  termParams.expirationLong,
-              premium:     termParams.premiumLong,
-              contracts:   termParams.contracts,
-              optionStyle,
-            },
-          ],
-        };
-
-        const [simResult, termRes] = await Promise.all([
-          runSimulation(simPayload),
-          fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(termBody),
-          }),
-        ]);
-
-        if (!termRes.ok) {
-          const err = await termRes.json().catch(() => ({ error: termRes.statusText }));
-          const details = Array.isArray(err.details)
-            ? err.details.map((d: any) => d.message ?? String(d)).join("; ")
-            : "";
-          throw new Error(`${err.error ?? "term_strategy_failed"}${details ? `: ${details}` : ""}`);
-        }
-
-        const termData = await termRes.json();
-        onTermResult?.(termData);
-        onResult(simResult);
-        return;
-      }
-
-      onResult(await runSimulation(simPayload));
+      onResult(await runSimulation(payload));
     } catch (err) {
       setError(err instanceof Error ? err.message : "simulation_failed");
     } finally {
@@ -928,12 +855,9 @@ export function SimulationControlPanel({
       <TermStrategyModal
         open={termModalOpen}
         estrategia={estrategia}
-        ticker={ticket}
-        currentPrice={coverageParams.currentPrice}
         params={termParams}
         onChange={setTermParams}
         onClose={() => setTermModalOpen(false)}
-        onDatesCorrected={handleTermDatesCorrected}
       />
       <CoverageParamsModal
         open={coverageModalOpen}
@@ -944,12 +868,16 @@ export function SimulationControlPanel({
         onClose={() => setCoverageModalOpen(false)}
         onConfirm={(params) => onCoverageParamsConfirmed?.(params, estrategia)}
       />
-      <OptionStrategyParamsModal
-        open={optionParamsModalOpen}
-        strategy={optionParamsStrategy}
+      {/* FIC: WheelParamsModal — coexists with CoverageParamsModal, fully independent. (EN) */}
+      {/* FIC: WheelParamsModal — coexiste con CoverageParamsModal, completamente independiente. (ES) */}
+      <SpreadParamsModal
+        open={spreadModalOpen}
+        estrategia={estrategia}
         ticker={ticket}
-        onClose={() => setOptionParamsModalOpen(false)}
-        onCalculated={onOptionStrategyCalculated}
+        params={spreadParams}
+        onChange={setSpreadParams}
+        onClose={() => setSpreadModalOpen(false)}
+        onConfirm={(params) => onSpreadParamsConfirmed?.(params, estrategia)}
       />
       <WheelParamsModal
         open={wheelModalOpen}
