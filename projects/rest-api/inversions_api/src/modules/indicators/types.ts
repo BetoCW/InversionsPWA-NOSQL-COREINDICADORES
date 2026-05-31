@@ -137,11 +137,7 @@ export type MetricKey =
   | "SOPORTES"
   | "RESISTENCIAS"
   | "ATR"
-  | "CANDLES_ANALYZED"
-  // FIC: A_NOTICIAS engine metrics (NEWS).
-  | "CONFIANZA"
-  | "CREDIBILIDAD"
-  | "PROVEEDOR";
+  | "CANDLES_ANALYZED";
 
 // FIC: Observacion estructurada que reemplaza el texto libre de la confluencia v1.
 // FIC: Replaces the free-form metadata bag with a typed observation (FR-020).

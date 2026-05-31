@@ -59,7 +59,6 @@ Definir el slice canonico de TEAM-01 para la plataforma de inversiones con IA, c
 - Para el equivalente de runbook operativo (Speckit T057 -> Diana T060), la evidencia minima incluye pasos reproducibles de start/stop/status y recuperacion ante `AUTH_CONTEXT_MISSING`, `AUTH_CONTEXT_INVALID_TOKEN`, secretos faltantes y puertos ocupados.
 - Para el equivalente de prueba de bootstrap auth (Speckit T058 -> Diana T067), la evidencia minima incluye test de integracion del orquestador con JWT dev sincronizado y 401 explicito para token ausente/invalido.
 
-
 ## Trazabilidad
 
 - Principios constitucionales:

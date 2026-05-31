@@ -52,6 +52,7 @@ export interface ConfluenceSignalRow {
   disclaimer_id?: string;
   delta_vs_anterior: DeltaPrev;
   observacion: SignalObservation;
+  resumen_analisis?: string;
   optionLeg?: OptionGreeks;
   algorithm_version: string;
   computed_at: string;
@@ -128,16 +129,17 @@ export const CANONICAL_ESTRATEGIAS = [
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
-  "BUY_CALL",
-  "BUY_PUT",
-  "SELL_CALL",
-  "SELL_PUT",
+  "LONG_CALL",
+  "LONG_PUT",
+  "SHORT_CALL",
+  "SHORT_PUT",
   "STRADDLE",
   "STRANGLE",
   "BUTTERFLY",
-  "IRON_BUTTERFLY",
-  "CONDOR",
-  "COVERED_CALL"
+  "COVERED_CALL",
+  "CALENDAR_SPREAD",
+  "DIAGONAL_SPREAD",
+  "WHEEL",
 ] as const;
 
 export const ALL_CORES: CoreId[] = [
@@ -150,3 +152,14 @@ export const ALL_CORES: CoreId[] = [
 ];
 
 export const ALL_SUBCORES: SubCoreIndicador[] = ["RSI", "MACD", "EMA", "ADX", "BB"];
+
+export {
+  buildCanonicalOutputString,
+  buildSignalContextMD,
+} from "@inversions/utils";
+export type {
+  CanonicalOutputRow,
+  CanonicalCoreId,
+  CanonicalTipoSenal,
+  CanonicalSignalObservation,
+} from "@inversions/utils";

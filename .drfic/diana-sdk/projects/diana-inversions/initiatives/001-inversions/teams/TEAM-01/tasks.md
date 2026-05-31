@@ -119,7 +119,6 @@ Mapeo explícito TEAM-01:
 - [ ] Sync T057 -> validar evidencia en Feature 002 para cierre de criterio operativo equivalente en Diana T060 (runbook start/stop/status + troubleshooting `AUTH_CONTEXT_*`, JWT y puertos).
 - [ ] Sync T058 -> validar evidencia en Feature 002 para cierre de criterio de validacion equivalente en Diana T067 (test de integracion bootstrap auth del orquestador con casos 401 y acceso exitoso).
 
-
 ## Ciclo Operativo de Sync (TEAM-01)
 
 1. Ejecutar /diana.sync action="tasks" mode="dry-run" team="TEAM-01" feature="002-team-01-dashboard-brokers".

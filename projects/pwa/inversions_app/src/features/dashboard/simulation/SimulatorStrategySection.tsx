@@ -9,14 +9,11 @@ import {
   type CoverageStrategyResult,
 } from "../../../services/coverage/coverageApi";
 import type { CoverageModalParams } from "./CoverageParamsModal";
-// FIC: Import WheelModalParams for read-only summary card. (EN)
-// FIC: Importa WheelModalParams para la tarjeta de resumen de solo lectura. (ES)
+import type { OptionStrategyAnalysis } from "./OptionStrategyParamsModal";
 import type { WheelModalParams } from "./WheelParamsModal";
-import type { SpreadModalParams } from "./SpreadParamsModal";
 
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
-const SPREAD_STRATEGIES = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD", "BULL_PUT_SPREAD", "BEAR_CALL_SPREAD"]);
-const DEBIT_SPREADS = new Set(["BULL_CALL_SPREAD", "BEAR_PUT_SPREAD"]);
+const CORE_OPTION_STRATEGIES = new Set(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
 
 const KIND_LABELS: Record<string, string> = {
   protective_put:   "Protective Put",
@@ -35,13 +32,16 @@ interface Props {
   ticker: string;
   activeStrategy: string;
   coverageRequest?: { params: CoverageModalParams; kind: string } | null;
-  spreadRequest?: { params: SpreadModalParams; kind: string } | null;
-  // FIC: Last confirmed Wheel params from WheelParamsModal — used for read-only summary. (EN)
-  // FIC: Últimos params Wheel confirmados en WheelParamsModal — usados para resumen de solo lectura. (ES)
+  optionStrategyAnalysis?: OptionStrategyAnalysis | null;
   wheelSummary?: WheelModalParams | null;
+  termResult?: any | null;
 }
 
-export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, spreadRequest, wheelSummary }: Props) {
+function money(value: number | "Ilimitado"): string {
+  return value === "Ilimitado" ? "Ilimitado" : `$${value.toFixed(2)}`;
+}
+
+export function SimulatorStrategySection({ ticker, activeStrategy, coverageRequest, optionStrategyAnalysis, wheelSummary, termResult }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CoverageAnalyzeResponse | null>(null);
@@ -90,14 +90,13 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
 
   const isTermStrategy = TERM_STRATEGIES.has(activeStrategy);
   const isCoverageStrategy = activeStrategy === "COVERED_CALL";
-  const isSpreadStrategy = SPREAD_STRATEGIES.has(activeStrategy);
-  // FIC: Wheel is a first-class strategy with its own summary panel. (EN)
-  // FIC: Wheel es una estrategia de primer nivel con su propio panel de resumen. (ES)
+  const isCoreOptionStrategy = CORE_OPTION_STRATEGIES.has(activeStrategy);
+  const hasCoreOptionAnalysis = isCoreOptionStrategy && optionStrategyAnalysis?.strategy === activeStrategy;
   const isWheelStrategy = activeStrategy === "WHEEL";
 
   const cardStyle: React.CSSProperties = {
     padding: "var(--space-lg)",
-    opacity: (!isCoverageStrategy && !isTermStrategy && !isWheelStrategy && !isSpreadStrategy) ? 0.5 : 1,
+    opacity: (!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy) ? 0.5 : 1,
   };
 
   const mutedText: React.CSSProperties = {
@@ -106,13 +105,27 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
     color: "var(--color-text-muted)",
   };
 
+  const fmt = (v: any, d = 2) =>
+    v != null && Number.isFinite(Number(v)) ? Number(v).toFixed(d) : "—";
+
   return (
     <section className="card" style={cardStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
         <h2 style={{ margin: 0, fontSize: "var(--font-size-base)" }}>
           Estrategia · {sectionTitle}
         </h2>
-        {(isTermStrategy || (!isCoverageStrategy && !isWheelStrategy && !isSpreadStrategy)) && (
+        {isTermStrategy && !termResult && (
+          <span style={{
+            fontSize: "var(--font-size-xs)",
+            color: "var(--color-text-muted)",
+            background: "var(--color-surface-raised)",
+            padding: "2px 8px",
+            borderRadius: "var(--radius-xs)",
+          }}>
+            Ejecuta la simulación para ver el análisis
+          </span>
+        )}
+        {(!isCoverageStrategy && !isCoreOptionStrategy && !isWheelStrategy && !isTermStrategy) && (
           <span style={{
             fontSize: "var(--font-size-xs)",
             color: "var(--color-text-muted)",
@@ -125,24 +138,232 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
         )}
       </div>
 
-      {/* TERM strategies — placeholder */}
-      {isTermStrategy && (
+      {/* TERM strategies — Calendar / Diagonal */}
+      {isTermStrategy && !termResult && (
         <p style={mutedText}>
-          El análisis de estrategias temporales (Calendar / Diagonal Spread) estará disponible en un sprint posterior.
+          Selecciona los parámetros y ejecuta la simulación para ver el análisis de {sectionTitle}.
         </p>
       )}
 
+      {isTermStrategy && termResult && (() => {
+        const analysis  = termResult.analysis  ?? {};
+        const report    = termResult.report    ?? {};
+        const risk      = report.riskMetrics   ?? {};
+        const mc        = termResult.simulation?.monteCarlo ?? null;
+        const stressTests: any[] = report.stressTests ?? [];
+        const payoff: any[] = report.payoffCurve ?? [];
+        const netTheta = analysis.netTheta ?? analysis.greeks?.theta ?? 0;
+        const delta    = analysis.greeks?.delta ?? risk.netDelta ?? 0;
+        const gamma    = analysis.greeks?.gamma ?? risk.netGamma ?? 0;
+        const vega     = analysis.greeks?.vega  ?? risk.netVega  ?? 0;
+        const pop      = risk.probabilityOfProfit ?? 0;
+        const breakEvenPrice: number = (() => {
+          if (!payoff.length) return 0;
+          for (let i = 1; i < payoff.length; i++) {
+            const prev = payoff[i - 1];
+            const curr = payoff[i];
+            if ((prev.pnl < 0 && curr.pnl >= 0) || (prev.pnl >= 0 && curr.pnl < 0)) {
+              return Number(curr.price ?? curr.underlyingPrice ?? 0);
+            }
+          }
+          return 0;
+        })();
+
+        return (
+          <div style={{ display: "grid", gap: "var(--space-md)" }}>
+
+            {/* Métricas principales */}
+            <div>
+              <p style={{ ...mutedText, marginBottom: "var(--space-sm)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--font-size-xs)" }}>
+                Métricas principales
+              </p>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Estructura", "DTE Corto", "DTE Largo", "Theta ($/día)", "Delta", "Gamma", "Vega ($/1%)", "PoP"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 600 }}>
+                      {termResult.structureName ?? sectionTitle}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {analysis.shortDte ?? "—"} días
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {analysis.longDte ?? "—"} días
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: netTheta > 0 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      ${fmt(netTheta)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {fmt(delta, 4)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      {fmt(gamma, 4)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                      ${fmt(vega)}
+                    </td>
+                    <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: pop >= 0.5 ? "var(--color-buy)" : "var(--color-sell)" }}>
+                      {fmt(pop * 100, 1)}%
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              {breakEvenPrice > 0 && (
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginTop: "var(--space-xs)" }}>
+                  Break-even aproximado: ${fmt(breakEvenPrice)}
+                </p>
+              )}
+            </div>
+
+            {/* Stress Tests */}
+            {stressTests.length > 0 && (
+              <div>
+                <p style={{ ...mutedText, marginBottom: "var(--space-sm)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--font-size-xs)" }}>
+                  Stress Tests
+                </p>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      {["Escenario", "Precio Suby.", "P&L ($)", "Valor Estrategia ($)"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stressTests.map((s: any) => (
+                      <tr key={s.label}>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", fontWeight: 500 }}>{s.label}</td>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>${fmt(s.underlyingPrice)}</td>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)", color: Number(s.pnl) >= 0 ? "var(--color-buy)" : "var(--color-sell)", fontWeight: 600 }}>
+                          {Number(s.pnl) >= 0 ? "+" : ""}${fmt(s.pnl)}
+                        </td>
+                        <td style={{ padding: "var(--space-sm)", fontSize: "var(--font-size-sm)", borderBottom: "1px solid var(--color-border-subtle)" }}>${fmt(s.strategyValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Monte Carlo */}
+            {mc && (
+              <div>
+                <p style={{ ...mutedText, marginBottom: "var(--space-sm)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "var(--font-size-xs)" }}>
+                  Simulación Monte Carlo ({mc.iterations ?? 1000} iteraciones) — valores en $
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "var(--space-sm)" }}>
+                  {[
+                    ["P&L Medio", `$${fmt(mc.meanPnl)}`],
+                    ["Mediana", `$${fmt(mc.medianPnl)}`],
+                    ["VaR 95%", `$${fmt(mc.var95)}`],
+                    ["P5", `$${fmt(mc.percentile5)}`],
+                    ["P95", `$${fmt(mc.percentile95)}`],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-xs)", padding: "var(--space-xs) var(--space-sm)" }}>
+                      <div style={{ fontSize: "0.6rem", color: "var(--color-text-muted)", fontWeight: 700, textTransform: "uppercase" }}>{label}</div>
+                      <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700 }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Payoff Chart */}
+            {payoff.length > 0 && (
+              <div>
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
+                  Diagrama de payoff — {termResult.structureName ?? sectionTitle}
+                </p>
+                <PayoffChart
+                  points={payoff.map((p: any) => ({
+                    underlyingPrice: Number(p.price ?? p.underlyingPrice ?? 0),
+                    pnl: Number(p.pnl ?? 0),
+                  }))}
+                  breakEvenPrice={breakEvenPrice}
+                  height={200}
+                />
+              </div>
+            )}
+
+          </div>
+        );
+      })()}
+
       {/* Unknown strategies */}
-      {!isCoverageStrategy && !isTermStrategy && !isWheelStrategy && !isSpreadStrategy && (
+      {!isCoverageStrategy && !isTermStrategy && !isCoreOptionStrategy && !isWheelStrategy && (
         <p style={mutedText}>
           El análisis de {sectionTitle} está en construcción y estará disponible próximamente.
         </p>
       )}
 
+      {isCoreOptionStrategy && !hasCoreOptionAnalysis && (
+        <p style={mutedText}>
+          Abre la estrategia en el panel de control, captura sus parámetros y presiona Calcular para enviar el resultado a la tabla de confluencia.
+        </p>
+      )}
+
+      {hasCoreOptionAnalysis && optionStrategyAnalysis && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+            {[
+              ["Strike", `$${Number(optionStrategyAnalysis.params.strikePrice).toFixed(2)}`],
+              ["Prima", `$${Number(optionStrategyAnalysis.params.premium).toFixed(2)}`],
+              ["Contratos", optionStrategyAnalysis.params.contracts],
+              ["Break-even", `$${optionStrategyAnalysis.result.breakeven.toFixed(2)}`],
+              ["Margen req.", `$${optionStrategyAnalysis.result.requiredMargin.toFixed(2)}`],
+            ].map(([label, value]) => (
+              <div key={label} style={{ border: "1px solid var(--color-border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--color-surface-raised)", padding: "var(--space-sm)" }}>
+                <div style={{ fontSize: "10px", color: "var(--color-text-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>{label}</div>
+                <strong style={{ fontSize: "var(--font-size-sm)" }}>{value}</strong>
+              </div>
+            ))}
+          </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "var(--space-md)" }}>
+            <thead>
+              <tr>
+                {["Max Profit", "Max Loss", "Escenario +5%", "Escenario ATM", "Escenario -5%"].map((h) => (
+                  <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ padding: "var(--space-sm)", color: "var(--color-buy)" }}>{money(optionStrategyAnalysis.result.maxProfit)}</td>
+                <td style={{ padding: "var(--space-sm)", color: "var(--color-sell)" }}>{money(optionStrategyAnalysis.result.maxLoss)}</td>
+                <td style={{ padding: "var(--space-sm)", color: optionStrategyAnalysis.result.scenarioPlus5 >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>${optionStrategyAnalysis.result.scenarioPlus5.toFixed(2)}</td>
+                <td style={{ padding: "var(--space-sm)", color: optionStrategyAnalysis.result.scenarioAtm >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>${optionStrategyAnalysis.result.scenarioAtm.toFixed(2)}</td>
+                <td style={{ padding: "var(--space-sm)", color: optionStrategyAnalysis.result.scenarioMinus5 >= 0 ? "var(--color-buy)" : "var(--color-sell)" }}>${optionStrategyAnalysis.result.scenarioMinus5.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {optionStrategyAnalysis.payoffPoints.length > 0 && (
+            <div>
+              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
+                Diagrama de payoff - {sectionTitle}
+              </p>
+              <PayoffChart points={optionStrategyAnalysis.payoffPoints} breakEvenPrice={optionStrategyAnalysis.result.breakeven} height={220} />
+            </div>
+          )}
+        </>
+      )}
+
       {/* Coverage strategies */}
       {isCoverageStrategy && (
         <>
-          {/* Waiting for params */}
           {!coverageRequest && !loading && !results && (
             <p style={mutedText}>
               Selecciona los parámetros en el panel de control para ver el análisis de {sectionTitle}.
@@ -159,26 +380,11 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
 
           {results && (
             <>
-              {/* Strategy table */}
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "var(--space-lg)" }}>
                 <thead>
                   <tr>
                     {["Estrategia", "Score", "Max Profit", "Max Loss", "Break-even", "Stop-loss", "Nivel"].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          textAlign: "left",
-                          padding: "var(--space-xs) var(--space-sm)",
-                          fontSize: "var(--font-size-xs)",
-                          color: "var(--color-text-muted)",
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          borderBottom: "1px solid var(--color-border-subtle)",
-                        }}
-                      >
-                        {h}
-                      </th>
+                      <th key={h} style={{ textAlign: "left", padding: "var(--space-xs) var(--space-sm)", fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid var(--color-border-subtle)" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -222,11 +428,6 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                 </tbody>
               </table>
 
-              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", margin: "var(--space-sm) 0" }}>
-                Haz clic en una fila para ver su diagrama de payoff
-              </p>
-
-              {/* PayoffChart */}
               {selectedResult && payoffPoints.length > 0 && (
                 <div style={{ marginBottom: "var(--space-lg)" }}>
                   <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
@@ -236,32 +437,11 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
                 </div>
               )}
 
-              {/* Alerts */}
               {selectedResult && selectedResult.alerts.length > 0 && (
                 <div>
-                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>
-                    Alertas:
-                  </p>
+                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "var(--space-sm)" }}>Alertas:</p>
                   {selectedResult.alerts.map((a, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        padding: "var(--space-xs) var(--space-sm)",
-                        marginBottom: "var(--space-xs)",
-                        borderRadius: "var(--radius-xs)",
-                        backgroundColor:
-                          a.severity === "critical" ? "rgba(226,59,74,0.12)"
-                          : a.severity === "warning" ? "rgba(176,144,0,0.12)"
-                          : "rgba(255,255,255,0.04)",
-                        border: `1px solid ${
-                          a.severity === "critical" ? "rgba(226,59,74,0.3)"
-                          : a.severity === "warning" ? "rgba(176,144,0,0.3)"
-                          : "rgba(255,255,255,0.06)"
-                        }`,
-                        fontSize: "var(--font-size-xs)",
-                        color: "var(--color-text)",
-                      }}
-                    >
+                    <div key={i} style={{ padding: "var(--space-xs) var(--space-sm)", marginBottom: "var(--space-xs)", borderRadius: "var(--radius-xs)", backgroundColor: a.severity === "critical" ? "rgba(226,59,74,0.12)" : a.severity === "warning" ? "rgba(176,144,0,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${a.severity === "critical" ? "rgba(226,59,74,0.3)" : a.severity === "warning" ? "rgba(176,144,0,0.3)" : "rgba(255,255,255,0.06)"}`, fontSize: "var(--font-size-xs)", color: "var(--color-text)" }}>
                       <strong>{a.code}</strong>: {a.message}
                     </div>
                   ))}
@@ -272,106 +452,35 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
         </>
       )}
 
-
-
-      {/* Debit/Credit spreads */}
-      {isSpreadStrategy && (
-        <>
-          {(!spreadRequest || spreadRequest.kind !== activeStrategy) && (
-            <p style={mutedText}>
-              Configura los strikes y primas para analizar {sectionTitle}. Debit Spread incluye Bull Call/Bear Put; Credit Spread incluye Bull Put/Bear Call.
-            </p>
-          )}
-          {spreadRequest && spreadRequest.kind === activeStrategy && (() => {
-            const p = spreadRequest.params;
-            const isDebit = DEBIT_SPREADS.has(activeStrategy);
-            const width = Math.abs(p.shortStrike - p.longStrike);
-            const net = isDebit ? p.longPremium - p.shortPremium : p.shortPremium - p.longPremium;
-            const multiplier = Math.max(1, p.contracts || 1) * 100;
-            const maxProfit = isDebit ? (width - net) * multiplier : net * multiplier;
-            const maxLoss = isDebit ? net * multiplier : (width - net) * multiplier;
-            const breakEven =
-              activeStrategy === "BULL_CALL_SPREAD" ? p.longStrike + net :
-              activeStrategy === "BEAR_PUT_SPREAD" ? p.longStrike - net :
-              activeStrategy === "BULL_PUT_SPREAD" ? p.shortStrike - net :
-              p.shortStrike + net;
-            const direction = activeStrategy === "BULL_CALL_SPREAD" || activeStrategy === "BULL_PUT_SPREAD" ? "Alcista" : "Bajista";
-            const family = isDebit ? "Debit Spread" : "Credit Spread";
-            const rows: Array<{ label: string; value: string; color?: string }> = [
-              { label: "Familia", value: family, color: "var(--color-accent)" },
-              { label: "Sesgo", value: direction, color: direction === "Alcista" ? "var(--color-buy)" : "var(--color-sell)" },
-              { label: isDebit ? "Débito neto" : "Crédito neto", value: net > 0 ? `$${net.toFixed(2)}` : "Revisar primas" },
-              { label: "Ancho spread", value: width > 0 ? `$${width.toFixed(2)}` : "—" },
-              { label: "Max profit", value: maxProfit > 0 ? `$${maxProfit.toFixed(2)}` : "—", color: "var(--color-buy)" },
-              { label: "Max loss", value: maxLoss > 0 ? `$${maxLoss.toFixed(2)}` : "—", color: "var(--color-sell)" },
-              { label: "Break-even", value: breakEven > 0 ? `$${breakEven.toFixed(2)}` : "—" },
-              { label: "Contratos", value: String(Math.max(1, p.contracts || 1)) },
-            ];
-
-            return (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--space-md)" }}>
-                {rows.map((r) => (
-                  <div key={r.label} style={{
-                    background: "var(--color-surface)",
-                    borderRadius: "var(--radius-sm)",
-                    padding: "var(--space-sm) var(--space-md)",
-                    border: "1px solid var(--color-border-subtle)",
-                  }}>
-                    <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "2px" }}>
-                      {r.label}
-                    </div>
-                    <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: r.color ?? "var(--color-text)" }}>
-                      {r.value}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-        </>
-      )}
-
-            {/* FIC: Wheel summary — read-only panel shown when activeStrategy === "WHEEL". (EN) */}
-      {/* FIC: Resumen Wheel — panel de solo lectura cuando activeStrategy === "WHEEL". (ES) */}
       {isWheelStrategy && (
         <>
           {!wheelSummary && (
-            <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)" }}>
-              Selecciona un PUT desde la Cadena de Opciones y configura los parámetros Wheel en el panel de control.
+            <p style={mutedText}>
+              Selecciona un PUT desde la cadena de opciones y configura los parámetros Wheel en el panel de control.
             </p>
           )}
           {wheelSummary && (() => {
-            // FIC: Simple inline math — avoids importing calcCsp/calcCc from WheelParamsModal. (EN)
-            // FIC: Matemática inline simple — evita importar calcCsp/calcCc de WheelParamsModal. (ES)
             const { csp, cc } = wheelSummary;
             const capitalComprometido = csp.strikePut * csp.contratos * 100;
-            const primaCsp  = csp.primaPut  * csp.contratos * 100;
-            const primaCc   = cc.primaCall  * cc.contratos  * 100;
+            const primaCsp = csp.primaPut * csp.contratos * 100;
+            const primaCc = cc.primaCall * cc.contratos * 100;
             const breakeven = csp.strikePut - csp.primaPut - cc.primaCall;
-            const roi       = capitalComprometido > 0 ? (primaCsp + primaCc) / capitalComprometido : 0;
-            const hasCc     = cc.strikeCall > 0 && cc.primaCall > 0;
-            const status    = hasCc ? "CC_CONFIGURADO" : "CSP_CONFIGURADO";
-            const statusColor = hasCc ? "var(--color-buy)" : "var(--color-accent)";
-
+            const roi = capitalComprometido > 0 ? (primaCsp + primaCc) / capitalComprometido : 0;
+            const hasCc = cc.strikeCall > 0 && cc.primaCall > 0;
             const rows: Array<{ label: string; value: string; color?: string }> = [
-              { label: "Estado",              value: status, color: statusColor },
-              { label: "Capital comprometido",value: capitalComprometido > 0 ? `$${capitalComprometido.toFixed(2)}` : "—" },
-              { label: "Prima CSP recibida",  value: primaCsp > 0 ? `$${primaCsp.toFixed(2)}` : "—", color: "var(--color-buy)" },
-              { label: "Prima CC recibida",   value: primaCc  > 0 ? `$${primaCc.toFixed(2)}`  : "—", color: "var(--color-buy)" },
-              { label: "Breakeven Wheel",     value: breakeven > 0 ? `$${breakeven.toFixed(2)}` : "—" },
-              { label: "ROI estimado",        value: roi > 0 ? `${(roi * 100).toFixed(2)}%` : "—", color: "var(--color-buy)" },
+              { label: "Estado", value: hasCc ? "CC_CONFIGURADO" : "CSP_CONFIGURADO", color: hasCc ? "var(--color-buy)" : "var(--color-accent)" },
+              { label: "Capital comprometido", value: capitalComprometido > 0 ? `$${capitalComprometido.toFixed(2)}` : "-" },
+              { label: "Prima CSP recibida", value: primaCsp > 0 ? `$${primaCsp.toFixed(2)}` : "-", color: "var(--color-buy)" },
+              { label: "Prima CC recibida", value: primaCc > 0 ? `$${primaCc.toFixed(2)}` : "-", color: "var(--color-buy)" },
+              { label: "Breakeven Wheel", value: breakeven > 0 ? `$${breakeven.toFixed(2)}` : "-" },
+              { label: "ROI estimado", value: roi > 0 ? `${(roi * 100).toFixed(2)}%` : "-", color: "var(--color-buy)" },
             ];
 
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-md)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "var(--space-md)" }}>
                 {rows.map((r) => (
-                  <div key={r.label} style={{
-                    background: "var(--color-surface)",
-                    borderRadius: "var(--radius-sm)",
-                    padding: "var(--space-sm) var(--space-md)",
-                    border: "1px solid var(--color-border-subtle)",
-                  }}>
-                    <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: "2px" }}>
+                  <div key={r.label} style={{ background: "var(--color-surface)", borderRadius: "var(--radius-sm)", padding: "var(--space-sm) var(--space-md)", border: "1px solid var(--color-border-subtle)" }}>
+                    <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginBottom: 2 }}>
                       {r.label}
                     </div>
                     <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: r.color ?? "var(--color-text)" }}>
@@ -384,7 +493,6 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
           })()}
         </>
       )}
-
     </section>
   );
 }

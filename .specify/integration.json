@@ -22,8 +22,5 @@
     }
   },
   "integration": "claude",
-  "default_integration": "claude",
-  "scripts": {
-    "update-context": ".specify/integrations/copilot/scripts/update-context.ps1"
-  }
+  "default_integration": "claude"
 }

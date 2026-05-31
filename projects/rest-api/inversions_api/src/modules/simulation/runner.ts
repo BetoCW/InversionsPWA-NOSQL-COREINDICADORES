@@ -17,6 +17,11 @@ import {
   type SubCoreIndicador,
   type Timeframe
 } from "../indicators/types";
+import { buildInstitutionalRows } from "../institutional/institutionalRowBuilder";
+// FIC: A_TECNICO real implementation — replaces stub when core is enabled. (EN)
+import { buildTechnicalTable } from "../indicators/technicalTable";
+import type { InstitutionalRouteContext } from "../../routes/institutional/bootstrap";
+import type { InstitutionalAnalysisContract } from "../institutional/institutionalContract";
 
 export interface SimulationRunResult {
   verdict: ConfluenceVerdict;
@@ -37,6 +42,10 @@ export const KNOWN_ESTRATEGIAS = new Set<string>([
   "IRON_CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
+  "LONG_CALL",
+  "LONG_PUT",
+  "SHORT_CALL",
+  "SHORT_PUT",
   "BUY_CALL",
   "BUY_PUT",
   "SELL_CALL",
@@ -44,9 +53,10 @@ export const KNOWN_ESTRATEGIAS = new Set<string>([
   "STRADDLE",
   "STRANGLE",
   "BUTTERFLY",
-  "IRON_BUTTERFLY",
-  "CONDOR",
-  "COVERED_CALL"
+  "COVERED_CALL",
+  "CALENDAR_SPREAD",
+  "DIAGONAL_SPREAD",
+  "WHEEL",
 ]);
 
 const RANGO_HISTORICO_DAYS: Record<string, number> = {
@@ -146,24 +156,29 @@ function candleCountFor(request: SimulationRequest): number {
 
 export interface RunSimulationDeps {
   /**
-   * FIC: Inyectable para test/runtime (default usa getCandles del mock determinista / TEAM-01).
+   * FIC: Inyectable para test/runtime (default usa getCandles async con Yahoo Finance). (EN)
    */
-  fetchCandles?: (input: { symbol: string; timeframe: Timeframe; count: number }) => OhlcBar[];
+  fetchCandles?: (input: { symbol: string; timeframe: Timeframe; count: number }) => OhlcBar[] | Promise<OhlcBar[]>;
   now?: Date;
   previousRows?: ConfluenceSignalRow[];
+  /** FIC: Institutional engines context — injected by the route handler when A_INSTITUCIONAL is enabled. */
+  institutionalContext?: Omit<InstitutionalRouteContext, "dataService"> & {
+    buildContract: (ticker: string) => InstitutionalAnalysisContract;
+  };
 }
 
 /**
  * FIC: Orquesta la simulacion: candles -> indicadores filtrados -> tabla -> stubs -> verdict derivado.
  * FIC: Idempotente: misma request + mismas candles -> misma respuesta (hash estable).
+ * FIC: Async desde TEAM-05: cuando A_INSTITUCIONAL está habilitado llama los engines reales en paralelo.
  */
-export function runSimulation(
+export async function runSimulation(
   request: SimulationRequest,
   deps: RunSimulationDeps = {}
-): SimulationRunResult {
+): Promise<SimulationRunResult> {
   const fetcher = deps.fetchCandles ?? getCandles;
   const count = candleCountFor(request);
-  const candles = fetcher({ symbol: request.ticket, timeframe: request.temporalidad, count });
+  const candles = await Promise.resolve(fetcher({ symbol: request.ticket, timeframe: request.temporalidad, count }));
   const computedAt = deps.now ?? new Date();
 
   const enabledCores = new Set<CoreId>(request.coresHabilitados);
@@ -189,8 +204,56 @@ export function runSimulation(
     });
   }
 
+  // FIC: A_INSTITUCIONAL — run engines with synthetic fallbacks; skip dataService.resolve() to avoid
+  // FIC: blocking on external HTTP sources (SEC EDGAR, FINRA, Yahoo) that are unreliable in sim context.
+  let institutionalRows: ConfluenceSignalRow[] = [];
+  if (enabledCores.has("A_INSTITUCIONAL") && deps.institutionalContext) {
+    const { zonesEngine, trendEngine, expirationEngine, buildContract } = deps.institutionalContext;
+    try {
+      const contract = buildContract(request.ticket);
+      // FIC: Pass undefined preResolvedResult — all 3 engines have deterministic synthetic fallbacks. (EN)
+      const [zonesSettled, trendSettled, expirationSettled] = await Promise.allSettled([
+        zonesEngine.analyze(contract, undefined),
+        trendEngine.analyze(contract, undefined),
+        expirationEngine.analyze(contract, undefined),
+      ]);
+      institutionalRows = buildInstitutionalRows({
+        ticket: request.ticket,
+        timeframe: request.temporalidad,
+        sourceInputHash: verdict.source_input_hash,
+        now: computedAt,
+        zones:      zonesSettled.status      === "fulfilled" ? zonesSettled.value      : null,
+        trend:      trendSettled.status      === "fulfilled" ? trendSettled.value      : null,
+        expiration: expirationSettled.status === "fulfilled" ? expirationSettled.value : null,
+      });
+    } catch (err) {
+      console.error("[A_INSTITUCIONAL] engine error — falling back to stub:", err);
+    }
+  }
+
+  // FIC: A_TECNICO real rows — uses candles already in scope, no extra fetch. (EN)
+  // FIC: Filas reales A_TECNICO — usa candles ya en scope, sin fetch extra. (ES)
+  const tecnicoRows = enabledCores.has("A_TECNICO")
+    ? buildTechnicalTable({
+        ticket:          request.ticket,
+        timeframe:       request.temporalidad,
+        candles,
+        sourceInputHash: verdict.source_input_hash,
+        previousRows:    deps.previousRows,
+        now:             computedAt,
+      })
+    : [];
+
+  // FIC: Stub remaining cores — skip A_INSTITUCIONAL/A_TECNICO if real rows were built. (EN)
+  // FIC: Stub de cores restantes — omite A_INSTITUCIONAL/A_TECNICO si hay filas reales. (ES)
   const stubCores = (ALL_CORE_IDS as readonly CoreId[])
-    .filter((c) => c !== "A_INDICADORES" && enabledCores.has(c));
+    .filter((c) => {
+      if (c === "A_INDICADORES") return false;
+      if (c === "A_INSTITUCIONAL" && institutionalRows.length > 0) return false;
+      if (c === "A_TECNICO" && tecnicoRows.length > 0) return false;
+      return enabledCores.has(c);
+    });
+
   if (stubCores.length > 0) {
     const stubs = buildCoreStubs({
       ticket: request.ticket,
@@ -200,7 +263,9 @@ export function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...stubs];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...stubs];
+  } else {
+    table = [...table, ...institutionalRows, ...tecnicoRows];
   }
 
   const disabled = (ALL_CORE_IDS as readonly CoreId[]).filter((c) => !enabledCores.has(c));
@@ -215,6 +280,6 @@ export function runSimulation(
     table,
     inputs_echo: request,
     computed_at: computedAt.toISOString(),
-    algorithm_version: ALGORITHM_VERSION
+    algorithm_version: ALGORITHM_VERSION,
   };
 }

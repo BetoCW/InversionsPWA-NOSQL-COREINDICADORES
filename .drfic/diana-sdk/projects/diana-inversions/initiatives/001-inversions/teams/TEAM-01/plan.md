@@ -173,7 +173,6 @@ Trazabilidad a requisitos:
 - Sync Speckit T058 -> Diana T067: cerrar prueba de integracion de bootstrap auth del dashboard orquestador (token sincronizado -> acceso OK; token ausente/invalido -> 401 explicito).
 - El cierre de estos puntos se valida por evidencia en la feature `specs/002-team-01-dashboard-brokers` sin alterar la autoridad del canon global.
 
-
 ## Riesgos y Mitigaciones
 
 - Riesgo: desalineacion entre dashboard y contratos de broker.

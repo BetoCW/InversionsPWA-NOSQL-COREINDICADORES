@@ -19,6 +19,7 @@ import { runtimeModeRouter } from "./routes/runtime/runtimeMode";
 import { instrumentsCatalogRouter } from "./routes/catalogs/instruments";
 import { brokerCapabilitiesRouter } from "./routes/brokers/capabilities";
 import { marketDataOhlcRouter } from "./routes/market-data/ohlc";
+import { marketQuotesRouter } from "./routes/market/quotes";
 import { indicatorsCatalogRouter } from "./routes/indicators/catalog";
 import { rsiRouter } from "./routes/indicators/rsi";
 import { macdRouter } from "./routes/indicators/macd";
@@ -41,12 +42,23 @@ import { coverageCompareRouter } from "./routes/coverage/compare";
 import { coverageSimulateRouter } from "./routes/coverage/simulate";
 import { optionChainRouter } from "./routes/options/chain";
 import { optionExpirationsRouter } from "./routes/options/expirations";
-import { newsRouter } from "./routes/news";
+import { supabaseClient } from "./database/supabase/client";
+import { calendarSpreadRouter } from "./routes/strategies/term/calendarSpread";
+import { diagonalSpreadRouter } from "./routes/strategies/term/diagonalSpread";
 
 // ── TEAM-08: Complex Strategy Routes ──
 import { alpacaExecutionRouter } from "./routes/strategies/complex/alpacaExecutionRouter";
 import { fromChainRouter } from "./routes/strategies/complex/fromChain";
 import { optionsChainRouter } from "./routes/strategies/complex/optionsChain";
+import { ironCondorRouter } from "./routes/strategies/complex/ironCondor";
+import { ironButterflyRouter } from "./routes/strategies/complex/ironButterfly";
+import { butterflySpreadRouter } from "./routes/strategies/complex/butterflySpread";
+import { condorRouter } from "./routes/strategies/complex/condor";
+import { complexComparatorRouter } from "./routes/strategies/complex/complexComparator";
+import { createFundamentalAnalyzeRouter } from "./routes/fundamental/analyze";
+import { createCompanyProfileRouter } from "./routes/fundamental/companyProfile";
+import { createOptionsRouter } from "./routes/strategies/optionsRouter";
+import { createOptionsAnalysisQARouter } from "./routes/strategies/optionsAnalysisQARouter";
 
 const envValidation = validateEnvironment();
 if (!envValidation.isValid) {
@@ -83,6 +95,7 @@ app.use("/api/runtime", runtimeModeRouter);
 app.use("/api/catalogs", instrumentsCatalogRouter);
 app.use("/api/brokers", brokerCapabilitiesRouter);
 app.use("/api/market-data", marketDataOhlcRouter);
+app.use("/api/market", marketQuotesRouter);
 app.use("/api/indicators", indicatorsCatalogRouter);
 app.use("/api/indicators", indicatorsRateLimit, rsiRouter);
 app.use("/api/indicators", indicatorsRateLimit, macdRouter);
@@ -102,12 +115,26 @@ app.use("/api/coverage", coverageCompareRouter);
 app.use("/api/coverage", coverageSimulateRouter);
 app.use("/api/options", indicatorsRateLimit, optionChainRouter);
 app.use("/api/options", indicatorsRateLimit, optionExpirationsRouter);
-app.use("/api/news", newsRouter);
+
+// ── Team-03 routes ──────────────────────────────────────────────────
+app.use("/api/team-03/fundamental", createFundamentalAnalyzeRouter(supabaseClient));
+app.use("/api/team-03/fundamental", createCompanyProfileRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsRouter(supabaseClient));
+app.use("/api/team-03/options", createOptionsAnalysisQARouter(supabaseClient));
+
+// ── Team-09 routes: Calendar & Diagonal Spreads ──────────────────────
+app.use("/api/v1/strategies/term", calendarSpreadRouter);
+app.use("/api/v1/strategies/term", diagonalSpreadRouter);
 
 // ── TEAM-08: Complex Strategy Routes ──
 app.use("/api/strategies/complex", optionsChainRouter);
 app.use("/api/strategies/complex", fromChainRouter);
 app.use("/api/strategies/complex", alpacaExecutionRouter);
+app.use("/api/strategies/complex", ironCondorRouter);
+app.use("/api/strategies/complex", ironButterflyRouter);
+app.use("/api/strategies/complex", butterflySpreadRouter);
+app.use("/api/strategies/complex", condorRouter);
+app.use("/api/strategies/complex", complexComparatorRouter);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
@@ -117,6 +144,25 @@ app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+// Debug: list all registered routes (temporary helper)
+app.get("/_debug/routes", (_req, res) => {
+  const routes: Array<{ path: string; methods: string[] }> = [];
+  const stack = (app as any)._router?.stack ?? [];
+  for (const layer of stack) {
+    if (layer.route && layer.route.path) {
+      routes.push({ path: layer.route.path, methods: Object.keys(layer.route.methods) });
+    } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+      for (const l of layer.handle.stack) {
+        if (l.route && l.route.path) {
+          // attempt to reconstruct mount path
+          const prefix = layer.regexp && layer.regexp.source ? layer.regexp.source : '';
+          routes.push({ path: `${prefix}${l.route.path}`, methods: Object.keys(l.route.methods) });
+        }
+      }
+    }
+  }
+  res.json({ routes });
+});
 const port = Number(process.env.PORT ?? 3000);
 
 app.listen(port, () => {
