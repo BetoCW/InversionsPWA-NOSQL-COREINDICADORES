@@ -616,6 +616,7 @@ export function MainDashboard() {
           height: "56px",
           borderRadius: "50%",
           background: "var(--color-accent)",
+          color: "#ffffff",
           border: "none",
           cursor: "pointer",
           display: "flex",
@@ -625,7 +626,9 @@ export function MainDashboard() {
           zIndex: 900,
           transition: "transform var(--duration-normal) var(--easing-standard), box-shadow var(--duration-normal) var(--easing-standard)"
         }}
-      />
+      >
+        <MessageSquare size={24} />
+      </button>
 
       {/* FIC: GlobalChatDrawer restored — was missing from JSX after file repair. (EN) */}
       {/* FIC: GlobalChatDrawer restaurado — faltaba en el JSX tras la reparación del archivo. (ES) */}
