@@ -16,6 +16,7 @@ import { AiDetailModal } from "../ai/AiDetailModal";
 import type { ModalRowData } from "../institutional/types";
 import { MarkdownContent } from "../../components/ui/MarkdownContent";
 import { ObservationsTab } from "./ObservationsTab";
+import { TecnicoDetailModal } from "./TecnicoDetailModal";
 
 // FIC: Columnas con ancho estable; la tabla se desplaza horizontalmente antes de aplastar texto.
 const TABLE_COLUMNS: Array<{ key: keyof ConfluenceSignalRow | "estrategia"; label: string; width: number }> = [
@@ -257,7 +258,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         </table>
       </div>
 
-      {stubCore && (
+      {stubCore && stubCore !== "A_TECNICO" && (
         <div
           role="dialog"
           aria-modal="true"
@@ -296,86 +297,7 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
               </p>
             )}
 
-            {/* FIC: A_TECNICO structured panel — replaces plain text for this core. (EN) */}
-            {stubCore === "A_TECNICO" && stubRow ? (() => {
-              // Parse evidencia_refs: ["trend:ALCISTA", "adx:28.7", ...]
-              const ev: Record<string, string> = {};
-              for (const ref of (stubRow.evidencia_refs ?? [])) {
-                const i = ref.indexOf(":");
-                if (i > 0) ev[ref.slice(0, i)] = ref.slice(i + 1);
-              }
-              const met = stubRow.observacion?.metricas ?? {};
-              const trendColor = stubRow.tendencia === "ALCISTA" ? "var(--color-buy)"
-                : stubRow.tendencia === "BAJISTA" ? "var(--color-sell)"
-                  : "var(--color-text-muted)";
-              const subCard = {
-                background: "var(--color-surface-raised)", borderRadius: "var(--radius-sm)",
-                padding: "0.75rem 1rem", border: "1px solid var(--color-border-subtle)"
-              };
-              const subTitle = {
-                fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase" as const,
-                letterSpacing: "0.07em", color: "var(--color-accent)", marginBottom: "0.5rem"
-              };
-              const dataRow = (label: string, value: React.ReactNode, color?: string) => (
-                <div style={{
-                  display: "flex", justifyContent: "space-between", padding: "2px 0",
-                  borderBottom: "1px solid var(--color-border-subtle)", fontSize: "0.75rem"
-                }}>
-                  <span style={{ color: "var(--color-text-muted)" }}>{label}</span>
-                  <span style={{ fontWeight: 600, color: color ?? "var(--color-text)" }}>{value}</span>
-                </div>
-              );
-              return (
-                <div style={{
-                  flex: 1, overflowY: "auto", display: "grid",
-                  gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem"
-                }}>
-                  {/* Tendencia */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Tendencia</div>
-                    {dataRow("Detectada", ev.trend ?? stubRow.tendencia, trendColor)}
-                    {dataRow("Fuerza", ev.trendStrength ?? (met.TREND_STRENGTH as string) ?? "—")}
-                  </div>
-                  {/* Momentum */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Momentum</div>
-                    {dataRow("ADX", ev.adx ? `${ev.adx}` : "—")}
-                    {dataRow("Interpretación",
-                      Number(ev.adx ?? 0) >= 40 ? "Muy fuerte" :
-                        Number(ev.adx ?? 0) >= 25 ? "Fuerte" :
-                          Number(ev.adx ?? 0) >= 15 ? "Débil" : "Sin tendencia")}
-                    {dataRow("Líneas", `${ev.trendLines ?? "0"} totales`)}
-                  </div>
-                  {/* Medias */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Medias Móviles</div>
-                    {dataRow("EMA50", met.SMA_50 ? `$${Number(met.SMA_50).toFixed(2)}` : "—")}
-                    {dataRow("Último cierre", stubRow.precio > 0 ? `$${stubRow.precio.toFixed(2)}` : "—")}
-                    {dataRow("Candles analizadas", met.CANDLES_ANALYZED ?? "—")}
-                  </div>
-                  {/* Soportes */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Soportes</div>
-                    {dataRow("Cantidad", ev.supports ?? (met.SOPORTES as string) ?? "0",
-                      Number(ev.supports ?? 0) > 0 ? "var(--color-buy)" : undefined)}
-                  </div>
-                  {/* Resistencias */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Resistencias</div>
-                    {dataRow("Cantidad", ev.resistances ?? (met.RESISTENCIAS as string) ?? "0",
-                      Number(ev.resistances ?? 0) > 0 ? "var(--color-sell)" : undefined)}
-                  </div>
-                  {/* Métricas */}
-                  <div style={subCard}>
-                    <div style={subTitle}>Métricas</div>
-                    {Object.entries(met).map(([k, v]) => dataRow(k, String(v)))}
-                    {Object.keys(met).length === 0 && (
-                      <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>Sin métricas</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })() : null}
+            {/* A_TECNICO logic moved to TecnicoDetailModal */}
 
             {/* FIC: Non-A_IA: ObservationsTab when stubRow available (upstream), else plain stubResumen. (EN) */}
             {stubCore !== "A_IA" && stubRow && (
@@ -448,6 +370,14 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
         data={modalTicker ? (institutionalResults[modalTicker.toUpperCase()] ?? null) : null}
         resumen={modalResumen}
         signalRow={modalRow ?? undefined}
+      />
+
+      <TecnicoDetailModal
+        isOpen={stubCore === "A_TECNICO"}
+        onClose={() => { setStubCore(null); setStubRow(null); }}
+        ticker={symbol}
+        signalRow={stubRow ?? undefined}
+        activeStrategy={activeStrategy}
       />
 
       <AiDetailModal
