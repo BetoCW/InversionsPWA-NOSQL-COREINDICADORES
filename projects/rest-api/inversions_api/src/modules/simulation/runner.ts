@@ -283,13 +283,14 @@ export async function runSimulation(
     const { zonesEngine, trendEngine, expirationEngine, buildContract } = deps.institutionalContext;
     try {
       const contract = buildContract(request.ticket);
-      // FIC: Pass undefined preResolvedResult — all 3 engines have deterministic synthetic fallbacks. (EN)
-      const [zonesSettled, trendSettled, expirationSettled] = await Promise.allSettled([
-        zonesEngine.analyze(contract, undefined),
-        trendEngine.analyze(contract, undefined),
-        expirationEngine.analyze(contract, undefined),
-      ]);
       const lastClose = candles[candles.length - 1]?.close ?? candles[candles.length - 1]?.open ?? 0;
+      const candlesSimple = candles.map((c) => ({ close: c.close, volume: c.volume }));
+      const candlesOhlcv = candles.map((c) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }));
+      const [zonesSettled, trendSettled, expirationSettled] = await Promise.allSettled([
+        zonesEngine.analyze(contract, undefined, candlesOhlcv),
+        trendEngine.analyze(contract, undefined, candlesSimple),
+        expirationEngine.analyze(contract, undefined, candlesSimple, lastClose),
+      ]);
       institutionalRows = buildInstitutionalRows({
         ticket: request.ticket,
         timeframe: request.temporalidad,
