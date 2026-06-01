@@ -46,10 +46,11 @@ export interface SimulationValidationError {
 
 export const KNOWN_ESTRATEGIAS = new Set<string>([
   "IRON_CONDOR",
+  "IRON_BUTTERFLY",
+  "BUTTERFLY_SPREAD",
+  "CONDOR",
   "BULL_CALL_SPREAD",
   "BEAR_PUT_SPREAD",
-  "BULL_PUT_SPREAD",
-  "BEAR_CALL_SPREAD",
   "LONG_CALL",
   "LONG_PUT",
   "SHORT_CALL",
@@ -346,7 +347,7 @@ export async function runSimulation(
       previousRows: deps.previousRows,
       now: computedAt
     });
-    table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows, ...stubs];
+    table = [...table, ...institutionalRows, ...tecnicoRows, ...stubs];
   } else {
     table = [...table, ...institutionalRows, ...tecnicoRows, ...noticiasRows];
   }

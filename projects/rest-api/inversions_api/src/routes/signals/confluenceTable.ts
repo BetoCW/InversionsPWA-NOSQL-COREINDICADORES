@@ -94,7 +94,6 @@ confluenceTableRouter.get("/confluence-table", async (req, res) => {
   if (stubCores.length > 0) {
     rows = [
       ...rows,
-      ...newsRows,
       ...buildCoreStubs({
         ticket,
         timeframe,
@@ -102,8 +101,6 @@ confluenceTableRouter.get("/confluence-table", async (req, res) => {
         sourceInputHash: verdict.source_input_hash
       })
     ];
-  } else if (newsRows.length > 0) {
-    rows = [...rows, ...newsRows];
   }
 
   return res.status(200).json({
