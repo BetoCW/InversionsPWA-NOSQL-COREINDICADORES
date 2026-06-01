@@ -68,6 +68,7 @@ interface Props {
   /** FIC: Permite sobrescribir las filas (por ejemplo desde una corrida de simulacion). */
   rows?: ConfluenceSignalRow[];
   activeStrategy?: string;
+  fundamentalAnalysis?: any;
 }
 
 function colorForTipo(tipo: string): string {
@@ -82,7 +83,12 @@ function colorForEstado(estado: string): string {
   return "var(--color-buy, #2ec27e)";
 }
 
-export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy }: Props) {
+export function ConfluenceSignalsTable({
+  symbol,
+  rows: rowsProp,
+  activeStrategy,
+  fundamentalAnalysis,
+}: Props) {
   const [rows, setRows] = useState<ConfluenceSignalRow[]>(rowsProp ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,10 +137,17 @@ export function ConfluenceSignalsTable({ symbol, rows: rowsProp, activeStrategy 
 
   const enrichedSorted = useMemo(() => {
     const order = ["A_INDICADORES", "A_FUNDAMENTAL", "A_TECNICO", "A_INSTITUCIONAL", "A_NOTICIAS", "A_IA"];
-    return [...rows]
+    
+    let finalRows = [...rows];
+    if (fundamentalAnalysis?.confluenceRows && fundamentalAnalysis.confluenceRows.length > 0) {
+      finalRows = finalRows.filter((r) => r.core !== "A_FUNDAMENTAL");
+      finalRows.push(...fundamentalAnalysis.confluenceRows);
+    }
+    
+    return finalRows
       .sort((a, b) => order.indexOf(a.core) - order.indexOf(b.core))
       .map((row) => ({ ...row, resumen_analisis: buildResumen(row, institutionalResults) }));
-  }, [rows, institutionalResults]);
+  }, [rows, institutionalResults, fundamentalAnalysis]);
 
   const totalCols = TABLE_COLUMNS.length;
   const sorted = enrichedSorted;
