@@ -331,7 +331,7 @@ export function SimulatorStrategySection({ ticker, activeStrategy, coverageReque
         const payoffCurve = profile?.payoff_curve ?? [];
         const griegas = profile?.griegas;
         const escenarios = simulation?.escenarios;
-        const bePoints: number[] = Array.isArray(profile?.break_even_points) ? profile.break_even_points : [];
+        const bePoints: number[] = Array.isArray(profile?.break_even_points) ? profile.break_even_points.filter((bp: number | null): bp is number => bp != null) : [];
 
         // Calculate DTE
         let dte = "—";
