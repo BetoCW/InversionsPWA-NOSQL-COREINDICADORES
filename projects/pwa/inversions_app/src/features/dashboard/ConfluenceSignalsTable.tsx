@@ -233,7 +233,8 @@ export function ConfluenceSignalsTable({
                     {TABLE_COLUMNS.map((col) => {
                       let content: React.ReactNode;
                       if (col.key === "estrategia") {
-                        content = <span className="badge badge-hold">{(activeStrategy ?? "N/A").replace(/_/g, " ")}</span>;
+                        const label = (row.estrategia ?? activeStrategy ?? "N/A").replace(/_/g, " ");
+                        content = <span className="badge badge-hold">{label}</span>;
                       } else if (col.key === "tipoSenal") {
                         content = <span style={{ color: colorForTipo(row.tipoSenal), fontWeight: 700 }}>{row.tipoSenal}</span>;
                       } else if (col.key === "estado") {

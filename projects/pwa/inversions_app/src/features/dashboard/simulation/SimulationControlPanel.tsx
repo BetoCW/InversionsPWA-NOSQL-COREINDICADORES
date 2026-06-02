@@ -462,8 +462,9 @@ function ChipButton({
 const TERM_STRATEGIES = new Set(["CALENDAR_SPREAD", "DIAGONAL_SPREAD"]);
 const CORE_OPTION_STRATEGIES = new Set<string>(["LONG_CALL", "LONG_PUT", "SHORT_CALL", "SHORT_PUT"]);
 const COMPLEX_STRATEGIES = new Set(["IRON_CONDOR", "IRON_BUTTERFLY", "BUTTERFLY_SPREAD", "CONDOR"]);
+const COVERAGE_STRATEGIES = new Set(["PROTECTIVE_PUT", "MARRIED_PUT", "COLLAR_PUT", "COVERED_STRADDLE"]);
 function isTermStrategy(e: string)     { return TERM_STRATEGIES.has(e); }
-function isCoverageStrategy(e: string) { return e === "COVERED_CALL"; }
+function isCoverageStrategy(e: string) { return COVERAGE_STRATEGIES.has(e); }
 function isCoreOptionStrategy(e: string): e is CoreOptionStrategy { return CORE_OPTION_STRATEGIES.has(e); }
 function isWheelStrategy(e: string)    { return e === "WHEEL"; }
 function isComplexStrategy(e: string)  { return COMPLEX_STRATEGIES.has(e); }
