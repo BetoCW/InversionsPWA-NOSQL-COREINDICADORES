@@ -41,6 +41,7 @@ import volatilityAnalysisRouter from "./routes/ai/volatilityAnalysis";
 import { coverageAnalyzeRouter } from "./routes/coverage/analyze";
 import { coverageCompareRouter } from "./routes/coverage/compare";
 import { coverageSimulateRouter } from "./routes/coverage/simulate";
+import { wheelEligibilityRouter } from "./routes/coverage/wheelEligibility";
 import { optionChainRouter } from "./routes/options/chain";
 import { optionExpirationsRouter } from "./routes/options/expirations";
 import { supabaseClient } from "./database/supabase/client";
@@ -116,6 +117,7 @@ app.use("/api/ai/volatility", volatilityAnalysisRouter);
 app.use("/api/coverage", coverageAnalyzeRouter);
 app.use("/api/coverage", coverageCompareRouter);
 app.use("/api/coverage", coverageSimulateRouter);
+app.use("/api/coverage", wheelEligibilityRouter);
 app.use("/api/options", indicatorsRateLimit, optionChainRouter);
 app.use("/api/options", indicatorsRateLimit, optionExpirationsRouter);
 

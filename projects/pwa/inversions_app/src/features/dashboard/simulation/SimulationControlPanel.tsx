@@ -10,7 +10,6 @@ import {
   ALL_SUBCORES,
   CANONICAL_ESTRATEGIAS,
   type CoreId,
-  type SubCoreIndicador,
   type SimulationRequestPayload,
   type SimulationResponse,
 } from "../../../services/signals/confluenceTableApi";
@@ -28,6 +27,7 @@ import { ComplexStrategyParamsModal, type ComplexFormState } from "./ComplexStra
 import { executeStrategy } from "../../../services/strategies/strategyApi";
 import type { FromChainResponse } from "../../../services/strategies/strategyApi";
 import { useSignalStore } from "../../../store/signals";
+import { useIndicatorStore } from "../../../store/indicators";
 
 // ─── Panel CSS ─────────────────────────────────────────────────────────────────
 // Uses only real Revolut design-system tokens from tokens.css.
@@ -551,18 +551,14 @@ const STRATEGY_OPTIONS: SelectOption[] = [
 function isoToday(): string       { return new Date().toISOString().slice(0, 10); }
 function isoPlusDays(n: number)   { return new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10); }
 
-// FIC: Initial core state — A_INDICADORES starts DISABLED by default at system start; the user
-// FIC: enables it manually. Other cores start enabled. This is purely the initial state: it is
-// FIC: never toggled off when the simulation runs (avoids turning it off by mistake). (EN)
-// FIC: Estado inicial de cores — A_INDICADORES arranca DESHABILITADO al iniciar el sistema; el
-// FIC: usuario lo activa a mano. Los demas cores arrancan activos. Es solo el estado inicial:
-// FIC: nunca se apaga al ejecutar la simulacion (evita apagarlo por error). (ES)
+// FIC: Initial core state — ALL cores start DISABLED at system start (like the technical indicators);
+// FIC: the user opts in to each core (Indicadores, Fundamental, Técnico, Institucional, Noticias, IA)
+// FIC: explicitly. Purely the initial/reset state. (EN)
+// FIC: Estado inicial de cores — TODOS los cores arrancan DESHABILITADOS al iniciar (igual que los
+// FIC: indicadores técnicos); el usuario activa cada core (Indicadores, Fundamental, Técnico,
+// FIC: Institucional, Noticias, IA) manualmente. Es solo el estado inicial/reset. (ES)
 const defaultCoresOn = (): Record<CoreId, boolean> =>
-  ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: c !== "A_INDICADORES" }), {} as Record<CoreId, boolean>);
-
-// FIC: Individual technical indicators start DISABLED; the user opts in (US-2). (EN)
-const defaultIndicadoresOn = (): Record<SubCoreIndicador, boolean> =>
-  ALL_SUBCORES.reduce((acc, s) => ({ ...acc, [s]: false }), {} as Record<SubCoreIndicador, boolean>);
+  ALL_CORES.reduce((acc, c) => ({ ...acc, [c]: false }), {} as Record<CoreId, boolean>);
 
 // ─── Section label style (shared) ─────────────────────────────────────────────
 const sectionLabelStyle: React.CSSProperties = {
@@ -612,8 +608,14 @@ export function SimulationControlPanel({
   const [tolerancia, setTolerancia]       = useState<"BAJO" | "MEDIO" | "ALTO">("MEDIO");
   // FIC: A_INDICADORES core starts DISABLED at system start (initial state only). (EN)
   const [coresOn, setCoresOn]             = useState<Record<CoreId, boolean>>(defaultCoresOn);
-  // FIC: US-2 — technical indicators start DISABLED; the user opts in explicitly. (EN)
-  const [indicadoresOn, setIndicadoresOn] = useState<Record<SubCoreIndicador, boolean>>(defaultIndicadoresOn);
+  // FIC: US-2 — technical indicator toggles live in the shared store so the chart ("arriba") and
+  // FIC: this panel ("abajo") stay synchronized in both directions, including deactivation. (EN)
+  // FIC: US-2 — los toggles de indicadores viven en el store compartido para que el gráfico
+  // FIC: ("arriba") y este panel ("abajo") queden sincronizados en ambos sentidos, incluso al desactivar. (ES)
+  const { indicators: indicadoresOn, toggleIndicator: toggleSub, setIndicator } = useIndicatorStore();
+  // FIC: Punto 3 — true once the user has run the simulation at least once; gates the auto-refresh. (EN)
+  // FIC: Punto 3 — true cuando el usuario ya corrió la simulación al menos una vez; habilita el auto-refresh. (ES)
+  const hasRunOnceRef = useRef(false);
   // FIC: US-8 — optional historical as-of date; empty means "use latest data". (EN)
   // FIC: US-8 — fecha historica opcional; vacio significa "usar datos mas recientes". (ES)
   const [fechaHistorica, setFechaHistorica] = useState<string>("");
@@ -718,7 +720,6 @@ export function SimulationControlPanel({
   };
 
   const toggleCore = (c: CoreId)          => setCoresOn((p) => ({ ...p, [c]: !p[c] }));
-  const toggleSub  = (s: SubCoreIndicador) => setIndicadoresOn((p) => ({ ...p, [s]: !p[s] }));
 
   // FIC: US-3 — full control-panel reset to defaults (also clears any prior results). (EN)
   // FIC: US-3 — reset completo del panel de control a defaults (limpia tambien resultados previos). (ES)
@@ -731,7 +732,9 @@ export function SimulationControlPanel({
     onStrategyChange?.("IRON_CONDOR");
     setTolerancia("MEDIO");
     setCoresOn(defaultCoresOn());
-    setIndicadoresOn(defaultIndicadoresOn());
+    // FIC: Reset shared indicator toggles to OFF (keeps chart "arriba" in sync). (EN)
+    // FIC: Restablece los toggles compartidos de indicadores a OFF (mantiene sincronía con el gráfico "arriba"). (ES)
+    ALL_SUBCORES.forEach((s) => setIndicator(s, false));
     setFechaHistorica("");
     setCoverageParams(DEFAULT_COVERAGE_PARAMS);
     setTermParams(DEFAULT_TERM_PARAMS);
@@ -744,6 +747,9 @@ export function SimulationControlPanel({
     setError(null);
     const activeCoreIds = ALL_CORES.filter((c) => coresOn[c]);
     onExecute?.(activeCoreIds);
+    // FIC: Mark that a manual run was initiated → enables auto-refresh on indicator toggles. (EN)
+    // FIC: Marca que se inició una corrida manual → habilita el auto-refresh al togglear indicadores. (ES)
+    hasRunOnceRef.current = true;
     try {
       const simPayload: SimulationRequestPayload = {
         ticket,
@@ -859,6 +865,40 @@ export function SimulationControlPanel({
       setLoading(false);
     }
   };
+
+  // FIC: Punto 3 — auto-refresh the confluence table when indicators are toggled (from the chart or
+  // FIC: this panel). Debounced; only after a manual run and with a valid (canonical) strategy, so we
+  // FIC: never hit the empty-strategy error nor spam the backend. Only refreshes the table (no modals
+  // FIC: nor strategy execution). (EN)
+  // FIC: Punto 3 — refresca la tabla de confluencia al togglear indicadores (desde el gráfico o este
+  // FIC: panel). Con debounce; solo tras una corrida manual y con estrategia válida (canónica), para no
+  // FIC: caer en el error de estrategia vacía ni spamear el backend. Solo refresca la tabla. (ES)
+  useEffect(() => {
+    if (!hasRunOnceRef.current) return;
+    if (!(CANONICAL_ESTRATEGIAS as readonly string[]).includes(estrategia)) return;
+    const id = setTimeout(async () => {
+      try {
+        const simPayload: SimulationRequestPayload = {
+          ticket,
+          rangoHistorico: preset,
+          rangoEstrategia: { from: estrategiaFrom, to: estrategiaTo },
+          temporalidad,
+          runtimeMode: "OFFLINE",
+          coresHabilitados: ALL_CORES.filter((c) => coresOn[c]),
+          indicadoresHabilitados: ALL_SUBCORES.filter((s) => indicadoresOn[s]),
+          estrategia,
+          toleranciaRiesgo: tolerancia,
+          soloCoincidencias: true,
+          ...(fechaHistorica ? { fechaHistorica } : {}),
+        };
+        onResult(await runSimulation(simPayload));
+      } catch {
+        // FIC: silent — the manual "Ejecutar Simulación" button surfaces any error. (EN)
+      }
+    }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicadoresOn]);
 
   const periodDays = Math.max(
     0,
