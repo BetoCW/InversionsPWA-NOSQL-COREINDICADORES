@@ -16,7 +16,7 @@ import type { CoverageModalParams } from "./simulation/CoverageParamsModal";
 import type { OptionStrategyAnalysis } from "./simulation/OptionStrategyParamsModal";
 import type { WheelModalParams } from "./simulation/WheelParamsModal";
 import { TechnicalAnalysisExtendedSection } from "./TechnicalAnalysisExtendedSection";
-import { NewsSourcesAnalyzer } from "../news";
+import { NewsSourcesAnalyzer, type NewsAnalysisResult } from "../news";
 import { AppShell } from "../../layouts/AppShell";
 import { ActivityBar } from "../../components/ui/ActivityBar";
 import { LeftPanel } from "../sidebar/LeftPanel";
@@ -79,6 +79,11 @@ export function MainDashboard() {
   const [activeChartTab, setActiveChartTab] = useState<"chart" | "chain">("chart");
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [noticias2Active, setNoticias2Active] = useState(false);
+  // Bug 1 — el módulo solo existe en el DOM después de que el usuario ejecutó la simulación
+  const [simulationHasRun, setSimulationHasRun] = useState(false);
+  const [noticias2DateRange, setNoticias2DateRange] = useState<{ from?: string; to?: string } | undefined>();
+  const [noticias2Result, setNoticias2Result] = useState<NewsAnalysisResult | null>(null);
+  const [noticias2ChatContext, setNoticias2ChatContext] = useState<string | null>(null);
 
   const { selectedInstrument, selectedStrike, runtimeMode, operationalMode, setSelectedStrike } = useSignalStore();
   const { setAnalysisCategory } = useAppShellStore();
@@ -86,9 +91,13 @@ export function MainDashboard() {
 
   const selectedSymbol = selectedInstrument?.symbol ?? "SPY";
 
-  // Carga los símbolos de la watchlist cuando el usuario activa "Noticias 2"
+  // Carga watchlist al activar Noticias 2; limpia resultados al desactivar
   useEffect(() => {
-    if (!noticias2Active) return;
+    if (!noticias2Active) {
+      setNoticias2Result(null);
+      setNoticias2ChatContext(null);
+      return;
+    }
     fetch("/api/watchlist", { headers: getAuthHeaders() })
       .then((r) => r.json())
       .then((data) => {
@@ -116,6 +125,13 @@ export function MainDashboard() {
       setComplexResult(null);
       setSelectedStrikeData(null);
       setSelectedStrike(undefined);
+      // Bug 4 — limpieza absoluta de Noticias 2 al cambiar ticker:
+      // oculta el módulo y borra toda la data para que el usuario parta de cero
+      setNoticias2Active(false);
+      setSimulationHasRun(false);
+      setNoticias2Result(null);
+      setNoticias2ChatContext(null);
+      setNoticias2DateRange(undefined);
     }
   }, [selectedSymbol, setSelectedStrike]);
 
@@ -128,6 +144,12 @@ export function MainDashboard() {
       return [...result.table, ...strategyRows];
     });
     setSimulationVerdict(result.verdict);
+    // Bug 1 — la simulación se ejecutó: habilita la visibilidad de Noticias 2
+    setSimulationHasRun(true);
+    // Req 2: captura el rango de fechas para pasarlo a NewsSourcesAnalyzer
+    if (result.inputs_echo?.rangoEstrategia) {
+      setNoticias2DateRange(result.inputs_echo.rangoEstrategia);
+    }
     // FIC: US-5 — prefer backend-computed metrics; fall back to a client-side count. (EN)
     if (result.signalMetrics) {
       setSimulationMetrics(result.signalMetrics);
@@ -398,7 +420,7 @@ export function MainDashboard() {
         onTermResult={handleTermResult}
         onClear={handleClearTable}
         onComplexResult={handleComplexResult}
-        onNoticias2Change={setNoticias2Active}
+        onNoticias2Change={(v) => setNoticias2Active(v)}
       />
 
       {/* ── Strategy error (from buildComplexStrategyRows validation) */}
@@ -409,16 +431,7 @@ export function MainDashboard() {
         </div>
       )}
 
-      {/* ── Simulation verdict */}
-      {simulationVerdict && (
-        <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-          <strong>Verdict derivado:</strong>
-          <span>
-            {String(simulationVerdict.verdict)} (score {Number(simulationVerdict.score ?? 0).toFixed(3)})
-            {simulationVerdict.degraded && <em style={{ color: "var(--color-text-muted)" }}> · degradado</em>}
-          </span>
-        </div>
-      )}
+      {/* Verdict derivado: eliminado del body — la info se muestra en la Tabla de Confluencias */}
 
       {/* ── Confluence table — empty state until simulation runs */}
       {simulationRows === undefined ? (
@@ -464,6 +477,7 @@ export function MainDashboard() {
             activeStrategy={activeSimulationStrategy}
             fundamentalAnalysis={fundamentalAnalysis}
             onStrategyRowClick={handleStrategyRowClick}
+            noticias2Verdict={noticias2Result?.verdict ?? null}
           />
         </div>
       )}
@@ -633,8 +647,27 @@ export function MainDashboard() {
         autoRunKey={fundamentalAutoRunKey}
         onAnalysisComplete={setFundamentalAnalysis}
       />
-      {noticias2Active && (
-        <NewsSourcesAnalyzer watchlistSymbols={watchlistSymbols.length > 0 ? watchlistSymbols : undefined} />
+      {/* Bug 1: el módulo NO existe en el DOM hasta que la simulación se haya ejecutado */}
+      {noticias2Active && simulationHasRun && (
+        <NewsSourcesAnalyzer
+          selectedSymbol={selectedSymbol}
+          watchlistSymbols={watchlistSymbols.length > 0 ? watchlistSymbols : undefined}
+          dateRange={noticias2DateRange}
+          onResult={(r) => {
+            setNoticias2Result(r);
+            // P5 — genera el prefill del input del chat (no lo abre ni envía automáticamente)
+            const LABELS: Record<string, string> = { BUY: 'COMPRAR', SELL: 'VENDER', HOLD: 'ESPERAR' };
+            const topPoint = r.keyPoints?.[0] ?? r.reasoning?.slice(0, 120) ?? 'análisis de noticias recientes';
+            const prefill = `Las noticias recientes sugieren [${LABELS[r.verdict] ?? r.verdict}] ${r.company} ` +
+              `(score ${r.score.toFixed(2)}, confianza ${(r.confidence * 100).toFixed(0)}%) ` +
+              `debido a: "${topPoint}". ¿Qué indicadores técnicos actuales respaldan o contradicen esta decisión?`;
+            setNoticias2ChatContext(prefill);
+          }}
+          onSendToChat={() => {
+            // Abre el chat con el prefill ya cargado en el input — el usuario presiona Enter
+            setCopilotOpen(true);
+          }}
+        />
       )}
     </div>
   );
@@ -680,6 +713,7 @@ export function MainDashboard() {
       <GlobalChatDrawer
         isOpen={copilotOpen}
         onClose={() => setCopilotOpen(false)}
+        prefillInput={noticias2ChatContext}
       />
     </>
   );

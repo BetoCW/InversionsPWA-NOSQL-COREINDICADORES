@@ -26,6 +26,25 @@ export interface URLAnalysisOptions {
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
+// Punto 2 — URLs de búsqueda específicas por dominio.
+// En lugar de la página raíz (genérica), se busca el ticker/empresa directamente.
+const SEARCH_TEMPLATES: Record<string, (company: string) => string> = {
+  "nasdaq.com":        c => `https://www.nasdaq.com/search?q=${encodeURIComponent(c)}+stock+news`,
+  "investing.com":     c => `https://www.investing.com/search/?q=${encodeURIComponent(c)}+stock`,
+  "cnbc.com":          c => `https://www.cnbc.com/search/?query=${encodeURIComponent(c)}+stock+news`,
+  "bloomberg.com":     c => `https://www.bloomberg.com/search?query=${encodeURIComponent(c)}+stock`,
+  "reuters.com":       c => `https://www.reuters.com/search/news?blob=${encodeURIComponent(c)}+stock`,
+  "marketwatch.com":   c => `https://www.marketwatch.com/search?q=${encodeURIComponent(c)}&ts=0&tab=All%20News`,
+  "finance.yahoo.com": c => `https://finance.yahoo.com/quote/${encodeURIComponent(c)}/news/`,
+  "seekingalpha.com":  c => `https://seekingalpha.com/search?q=${encodeURIComponent(c)}+stock`,
+};
+
+function buildSearchUrl(domain: string, company: string): string {
+  const host = hostnameOf(domain.startsWith("http") ? domain : `https://${domain}`);
+  const key  = Object.keys(SEARCH_TEMPLATES).find(k => host.includes(k));
+  return key ? SEARCH_TEMPLATES[key](company) : (domain.startsWith("http") ? domain : `https://${domain}`);
+}
+
 export class URLAnalysisService {
   private analyzer: NewsSentimentAnalyzer;
   private timeoutMs: number;
@@ -102,9 +121,10 @@ export class URLAnalysisService {
     const results: SourceAnalysisResult[] = [];
 
     for (const domain of domains) {
-      const fullUrl = domain.startsWith("http") ? domain : `https://${domain}`;
+      // Punto 2 — usa URL de búsqueda específica al ticker, no la homepage genérica
+      const searchUrl = buildSearchUrl(domain, company);
       try {
-        const content = await this.fetchURLContent(fullUrl, company);
+        const content = await this.fetchURLContent(searchUrl, company);
         const analysis = await this.analyzeSourceImpact(content, company);
         results.push(analysis);
       } catch {
@@ -144,13 +164,31 @@ export class URLAnalysisService {
       keyFactors: keyPoints
     };
 
+    // Punto 3 — razonamiento transparente que explica el score al usuario
+    const positiveResults = results.filter(r => r.score >  0.1);
+    const negativeResults = results.filter(r => r.score < -0.1);
+    const neutralResults  = results.filter(r => r.score >= -0.1 && r.score <= 0.1);
+    const topReason = results.sort((a, b) => Math.abs(b.score) - Math.abs(a.score))[0]?.reasoning ?? "";
+
+    const reasoningParts = [
+      `Análisis de ${results.length} fuente(s) sobre ${company}: ` +
+      `${positiveResults.length} alcista(s), ${negativeResults.length} bajista(s), ${neutralResults.length} neutral(es).`,
+      positiveResults.length > 0
+        ? `Señales positivas: ${positiveResults.map(r => hostnameOf(r.url)).join(", ")}.`
+        : "",
+      negativeResults.length > 0
+        ? `Señales negativas: ${negativeResults.map(r => hostnameOf(r.url)).join(", ")}.`
+        : "",
+      topReason ? `Razonamiento principal: ${topReason}` : "",
+    ].filter(Boolean).join(" ");
+
     return {
       url: domains.join(", "),
       company: company.toUpperCase(),
       verdict: resolveVerdict(aggregated),
       score: avgScore,
       confidence: avgConfidence,
-      reasoning: `Análisis consolidado de ${results.length} fuente(s) (${sourcesLabel}) para ${company}.`,
+      reasoning: reasoningParts,
       keyPoints,
       timestamp
     };
